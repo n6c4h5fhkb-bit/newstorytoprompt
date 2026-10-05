@@ -1,0 +1,85 @@
+chunk_summarizer:
+  role_card: skills/writer/roles/chunk_summarizer.md
+  inputs: [chunk]
+  must_not_see: [later_ledger, writer_reasoning]
+  references: []
+breakdown:
+  role_card: skills/writer/roles/breakdown.md
+  inputs: [summaries]
+  must_not_see: [later_ledger, writer_reasoning]
+  references: []
+adapt_plan:
+  role_card: skills/writer/roles/adapt_plan.md
+  inputs: [breakdown, source_passages, episode_target]
+  must_not_see: [later_ledger, writer_reasoning]
+  references: [skills/writer/taste/audience_rubric.md, skills/writer/taste/differentiation_card.md, skills/writer/taste/source_addresses.md, skills/writer/taste/bible_and_ledger.md]
+plan_reviewer:
+  role_card: skills/writer/reviewers/plan_reviewer.md
+  inputs: [plan, breakdown, source_passages, warnings]
+  must_not_see: [later_ledger, writer_reasoning]
+  references: [skills/writer/taste/audience_rubric.md, skills/writer/taste/differentiation_card.md, skills/shared/finding_format.md, skills/writer/taste/bible_and_ledger.md]
+amplify:
+  role_card: skills/writer/roles/amplify.md
+  inputs: [moment, plan_slice, direction, source_passages, variant_count]
+  must_not_see: [later_ledger, writer_reasoning]
+  references: [skills/writer/taste/audience_rubric.md, skills/writer/taste/moment_scope.md]
+payoff_judge:
+  role_card: skills/writer/reviewers/payoff_judge.md
+  inputs: [moment, versions, source_passages]
+  must_not_see: [later_ledger, writer_reasoning, writer_scores]
+  references: [skills/writer/taste/audience_rubric.md, skills/writer/taste/moment_scope.md, skills/shared/finding_format.md]
+episode_writer:
+  role_card: skills/writer/roles/episode_writer.md
+  inputs: [plan_slice, direction, amplified, adopted_script, bible, ledger_in, source_passages, previous_last_scene, example, script_notes, episode_target]
+  must_not_see: [later_ledger, ledger_out, writer_reasoning]
+  references: [skills/writer/taste/audience_rubric.md, skills/writer/taste/differentiation_card.md, skills/writer/taste/screenplay_format.md, skills/writer/taste/revision_fidelity.md]
+viewer:
+  role_card: skills/writer/reviewers/viewer.md
+  inputs: [script, recap, example, warnings]
+  must_not_see: [plan, plan_slice, adopted_script, bible, source_passages, novel, ledger_in, ledger_out, later_ledger, writer_reasoning, script_notes]
+  references: [skills/writer/taste/audience_rubric.md, skills/shared/finding_format.md]
+story_check:
+  role_card: skills/writer/reviewers/story_check.md
+  inputs: [script, plan_slice, adopted_script, bible, ledger_in, source_passages, script_notes, warnings]
+  must_not_see: [ledger_out, later_ledger, writer_reasoning]
+  references: [skills/writer/taste/audience_rubric.md, skills/shared/finding_format.md, skills/writer/taste/revision_fidelity.md]
+art_director:
+  role_card: skills/director/roles/art_director.md
+  inputs: [bible, script]
+  must_not_see: [writer_reasoning, later_ledger]
+  references: [skills/director/taste/style_guide.md]
+asset_extract:
+  role_card: skills/director/roles/asset_extract.md
+  inputs: [bible, script, style, assets, asset_requests]
+  must_not_see: [writer_reasoning, later_ledger]
+  references: [skills/director/taste/shot_rules.md, skills/director/taste/asset_composition.md]
+asset_prompt:
+  role_card: skills/director/roles/asset_prompt.md
+  inputs: [asset, parent, style]
+  must_not_see: [writer_reasoning, later_ledger]
+  references: [skills/director/taste/style_guide.md, skills/director/taste/asset_composition.md]
+storyboard:
+  role_card: skills/director/roles/storyboard.md
+  inputs: [script, bible, ledger_in, previous_carry_out, continuity_notes, assets, style, model_card]
+  must_not_see: [writer_reasoning, later_ledger, ledger_out]
+  references: [skills/director/taste/shot_rules.md, skills/director/taste/asset_composition.md]
+scene_fidelity:
+  role_card: skills/director/reviewers/scene_fidelity.md
+  inputs: [script_scene, ledger_in, previous_carry_out, continuity_notes, units, assets, warnings]
+  must_not_see: [writer_reasoning, later_ledger, ledger_out]
+  references: [skills/shared/finding_format.md, skills/director/taste/asset_composition.md]
+unit_prompt:
+  role_card: skills/director/roles/unit_prompt.md
+  inputs: [units, mappings, style, model_card, warnings]
+  must_not_see: [writer_reasoning, later_ledger, ledger_out]
+  references: [skills/director/taste/seedance_template.md, skills/director/taste/asset_composition.md]
+reconstruction_blind:
+  role_card: skills/director/reviewers/reconstruction_blind.md
+  inputs: [prompt, reference_descriptions, model_card, warnings]
+  must_not_see: [script, script_scene, storyboard, units, ledger_in, ledger_out, writer_reasoning, later_ledger]
+  references: [skills/shared/finding_format.md]
+reconstruction_compare:
+  role_card: skills/director/reviewers/reconstruction_compare.md
+  inputs: [reconstruction, unit, warnings]
+  must_not_see: [script, script_scene, writer_reasoning, later_ledger, ledger_out]
+  references: [skills/shared/finding_format.md, skills/director/taste/asset_composition.md]

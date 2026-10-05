@@ -1,0 +1,16 @@
+# Optional alternate transport; the user-selected default is Codex CLI.
+models:
+  strong: &api
+    provider: openai_compatible
+    model: null
+    model_env: SFL_STRONG_MODEL
+    api_key_env: OPENAI_API_KEY
+    base_url: https://api.openai.com/v1
+    base_url_env: OPENAI_BASE_URL
+    api: responses
+    structured_output: json_schema
+    max_output_tokens: 16000
+    timeout_seconds: 180
+    prices_per_million: {input: null, output: null}
+  cheap: *api
+  reviewer: *api

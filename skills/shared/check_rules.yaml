@@ -1,0 +1,17 @@
+reserved_speakers: [系统, 旁白]
+dialogue_kinds: [speech, offscreen, thought, system, narration]
+asset_types: [character, location, prop, ui, voice, music, layout]
+asset_id_prefixes: {character: char, location: loc, prop: prop, ui: ui, voice: voice, music: music, layout: layout}
+reference_categories:
+  character: images
+  location: images
+  prop: images
+  ui: images
+  layout: images
+  voice: audio
+  music: audio
+jargon: [收束状态, 桌端通路]
+ambiguous_words: [近侧, 远侧, 初始状态]
+palette_placeholder: '@色卡'
+continuation_placeholder: '@上段尾帧'
+hook_types: [Danger peak, Pending reveal, Discovery on the brink, Reversal setup, Escalation, Forced decision, Turning line]

@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "storyforge-lite"
+version = "0.1.0"
+description = "Local, text-only novel-to-Seedance production workflow"
+requires-python = ">=3.11"
+dependencies = ["PyYAML>=6,<7"]
+
+[project.scripts]
+sfl = "storyforge.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["platform"]
+include = ["storyforge*"]
+
+[tool.setuptools.package-data]
+"storyforge.ui" = ["assets/*"]

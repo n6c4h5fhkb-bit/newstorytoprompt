@@ -1,0 +1,1 @@
+{"writer_key":"unit_prompt:ep01:S01","mutations":[{"path":["prompts",0,"negative"],"value":"镜头开场云清禾仍戴原来那副腕镣，地上另摆一副备用腕镣。"}],"reviewer":"reconstruction_blind","review_target":"ep01_u01","finding":{"severity":"major","kind":"error","location":"ep01_u01 开镜道具数量","evidence":"地上另摆一副备用腕镣","problem":"把人物佩戴与独立道具参考解释为两副腕镣，新增了分镜没有的备用物件","suggested_fix":"人物与道具参考组合为同一副腕镣，明确佩戴、取下和落点，不新增备用件"}}

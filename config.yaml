@@ -1,0 +1,20 @@
+models:
+  strong: &codex
+    provider: codex_cli
+    model: gpt-6-sol
+    effort: high
+    command: null
+    timeout_seconds: 600
+    prices_per_million: {input: null, output: null}
+  cheap: *codex
+  reviewer: *codex
+best_of_n: {key_moments: 3, other_moments: 1}
+speech_rate_chars_per_sec: 4.5
+episode_minutes: {min: 3, max: 5}
+card: {score_margin: 0.1, max_open_per_phase: 3}
+fix_rounds: 2
+external_attempts: 3  # Total attempts for retryable transport failures; CLI native retries are disabled.
+warnings: {source_overlap: 0.15, prompt_chars: 3500}
+token_budget: {per_episode: null, alert_at: 0.8}
+output: {model_card: seedance-2.0, ratio: '16:9', music: none}
+concurrency: {llm: 4}

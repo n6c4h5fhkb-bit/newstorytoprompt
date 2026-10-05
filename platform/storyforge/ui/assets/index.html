@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>StoryForge Lite</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
+</head>
+<body data-project="<!--SFL:PROJECT-->" data-view="<!--SFL:VIEW-->" data-episode="<!--SFL:EPISODE-->" data-item="<!--SFL:ITEM-->" data-running="<!--SFL:RUNNING-->">
+  <aside>
+    <div class="brand"><span class="mark">S</span><div>StoryForge <small>Lite · 故事到镜头</small></div></div>
+    <label class="project-label" for="project">当前项目</label>
+    <form method="get" action="/" class="selection-form">
+      <input type="hidden" name="view" value="<!--SFL:VIEW-->">
+      <select id="project" name="project"><!--SFL:PROJECT_OPTIONS--></select>
+      <button type="submit" class="secondary">切换</button>
+    </form>
+    <nav aria-label="工作区">
+      <!--SFL:NAVIGATION-->
+    </nav>
+    <div class="aside-note">16:9 · 文本交付<br>在你的生成工具中制作视频，<br>在这里保持故事和镜头一致。</div>
+  </aside>
+  <main>
+    <header><p class="eyebrow">STORYFORGE WORKSPACE</p><h1 id="title"><!--SFL:TITLE--></h1><div id="notice" role="status" aria-live="polite"></div></header>
+    <div id="content" aria-busy="false"><!--SFL:CONTENT--></div>
+  </main>
+</body>
+</html>

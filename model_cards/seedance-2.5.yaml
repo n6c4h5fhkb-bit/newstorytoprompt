@@ -1,0 +1,9 @@
+name: seedance-2.5
+max_seconds: 30
+refs: {images: null, videos: null, audio: null}
+max_total_refs: 50
+multi_shot: true
+timestamp_control: unverified
+readable_text: unverified
+native_audio: true
+verification: blocked-until-account-limits-are-filled-in

@@ -1,0 +1,389 @@
+schemas:
+  style:
+    type: object
+    additionalProperties: false
+    required: [text, art_prompt, style_lock, palette_description, responses]
+    properties:
+      text: &text {type: string, minLength: 1}
+      art_prompt: *text
+      style_lock: *text
+      palette_description: *text
+      responses: &responses
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [finding_id, disposition, reason]
+          properties:
+            finding_id: *text
+            disposition: {type: string, enum: [fix, reject]}
+            reason: *text
+  assets:
+    type: object
+    additionalProperties: false
+    required: [assets, responses]
+    properties:
+      responses: *responses
+      assets:
+        type: array
+        minItems: 1
+        items:
+          type: object
+          additionalProperties: false
+          required: [type, name, variant, parent, what_changed, placeholder, description]
+          properties:
+            type: {type: string, enum: [character, location, prop, ui, voice, music, layout]}
+            name: *text
+            variant: &string {type: string}
+            parent: *string
+            what_changed: *string
+            placeholder: {type: string, pattern: '^@[\w\u4e00-\u9fff]+$'}
+            description: *text
+  brief:
+    type: object
+    additionalProperties: false
+    required: [brief, responses]
+    properties:
+      brief: *text
+      responses: *responses
+  storyboard:
+    type: object
+    additionalProperties: false
+    required: [episode, units, asset_requests, responses]
+    properties:
+      episode: {type: integer, minimum: 1}
+      responses: *responses
+      asset_requests: {type: array, items: *text}
+      units:
+        type: array
+        minItems: 1
+        items:
+          type: object
+          additionalProperties: false
+          required: [id, scene, seconds, assets, offscreen, absent, reference_exclusions, chain_from_previous, carry_in, carry_out, shots]
+          properties:
+            id: *text
+            scene: *text
+            seconds: &seconds {type: number, exclusiveMinimum: 0}
+            assets: &names {type: array, items: *text, uniqueItems: true}
+            offscreen: *names
+            reference_exclusions:
+              type: array
+              items:
+                type: object
+                additionalProperties: false
+                required: [placeholder, reason]
+                properties: {placeholder: *text, reason: *text}
+            absent:
+              type: array
+              items:
+                type: object
+                additionalProperties: false
+                required: [name, reason]
+                properties: {name: *text, reason: *text}
+            chain_from_previous: {type: boolean}
+            carry_in: *text
+            carry_out: *text
+            shots:
+              type: array
+              minItems: 1
+              items:
+                type: object
+                additionalProperties: false
+                required: [id, seconds, size, camera, on_screen, positions, action, dialogue, sfx, ambience, overlays]
+                properties:
+                  id: *text
+                  seconds: *seconds
+                  size: *text
+                  camera: *text
+                  on_screen: *names
+                  positions: *text
+                  action: *text
+                  ambience: *string
+                  dialogue:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [who, kind, line]
+                      properties:
+                        who: *text
+                        kind: {type: string, enum: [speech, offscreen, thought, system, narration]}
+                        line: *text
+                  sfx:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [what, at]
+                      properties:
+                        what: *text
+                        at: {type: number, minimum: 0}
+                  overlays:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [start, end, text]
+                      properties:
+                        start: {type: number, minimum: 0}
+                        end: *seconds
+                        text: *text
+  prompts:
+    type: object
+    additionalProperties: false
+    required: [prompts, responses]
+    properties:
+      responses: *responses
+      prompts:
+        type: array
+        minItems: 1
+        items:
+          type: object
+          additionalProperties: false
+          required: [unit_id, performance, environment, spatial_anchors, continuation, shots, negative]
+          properties:
+            unit_id: *text
+            performance: *text
+            environment: *text
+            spatial_anchors: *text
+            continuation: *text
+            shots: *text
+            negative: *text
+  findings: &findings
+    type: object
+    additionalProperties: false
+    required: [findings]
+    properties:
+      findings:
+        type: array
+        items: &finding
+          type: object
+          additionalProperties: false
+          required: [severity, kind, location, evidence, problem, suggested_fix]
+          properties:
+            severity: {type: string, enum: [blocker, major, minor]}
+            kind: {type: string, enum: [error, omission]}
+            location: *text
+            evidence: *text
+            problem: *text
+            suggested_fix: *text
+  scene_review:
+    type: object
+    additionalProperties: false
+    required: [findings, script_notes]
+    properties:
+      findings: {type: array, items: *finding}
+      script_notes:
+        type: array
+        uniqueItems: true
+        items:
+          type: object
+          additionalProperties: false
+          required: [location, evidence, note]
+          properties:
+            location: *text
+            evidence: *text
+            note: *text
+  reconstruction:
+    type: object
+    additionalProperties: false
+    required: [description, findings]
+    properties:
+      description: *text
+      findings: {type: array, items: {type: object, additionalProperties: false, required: [severity, kind, location, evidence, problem, suggested_fix], properties: {severity: {type: string, enum: [blocker, major, minor]}, kind: {type: string, enum: [error, omission]}, location: *text, evidence: *text, problem: *text, suggested_fix: *text}}}
+
+  chunk_summary:
+    type: object
+    additionalProperties: false
+    required: [chunk_id, events, entities, responses]
+    properties:
+      chunk_id: *text
+      responses: *responses
+      events:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [id, text, characters, tags, intensity, source_refs, fact_status]
+          properties:
+            id: *text
+            text: *text
+            characters: *names
+            tags: &beat_tags {type: array, uniqueItems: true, items: {type: string, enum: [爽点, 虐点, 反转, 打脸, 身份揭示, 悬念]}}
+            intensity: &intensity {type: integer, minimum: 1, maximum: 5}
+            source_refs: &source_refs {type: array, minItems: 1, uniqueItems: true, items: {type: string, pattern: '^ch\d{3,}:p\d{4,}$'}}
+            fact_status: {type: string, enum: [fact, inference, uncertain]}
+      entities:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [name, kind, description, source_refs]
+          properties:
+            name: *text
+            kind: {type: string, enum: [character, location, prop, ui, voice]}
+            description: *text
+            source_refs: *source_refs
+  breakdown:
+    type: object
+    additionalProperties: false
+    required: [main_plot, subplots, character_arcs, beats, responses]
+    properties:
+      main_plot: *text
+      subplots: {type: array, items: *text}
+      responses: *responses
+      character_arcs:
+        type: array
+        items: {type: object, additionalProperties: false, required: [name, arc], properties: {name: *text, arc: *text}}
+      beats:
+        type: array
+        minItems: 1
+        items:
+          type: object
+          additionalProperties: false
+          required: [id, summary, characters, tags, intensity, source_refs, key]
+          properties:
+            id: *text
+            summary: *text
+            characters: *names
+            tags: *beat_tags
+            intensity: *intensity
+            source_refs: *source_refs
+            key: {type: boolean}
+  adaptation_plan:
+    type: object
+    additionalProperties: false
+    required: [adaptation, differentiation, decisions, episodes, hooks, selected_hook, reason, moments, bible, ledger_in, responses]
+    properties:
+      adaptation: *text
+      differentiation: *text
+      bible: *text
+      ledger_in: *text
+      responses: *responses
+      selected_hook: *text
+      reason: *text
+      decisions:
+        type: array
+        minItems: 1
+        items: {type: object, additionalProperties: false, required: [beat_id, action, merge_into, reason], properties: {beat_id: *text, action: {type: string, enum: [keep, cut, merge]}, merge_into: *string, reason: *text}}
+      episodes:
+        type: array
+        minItems: 1
+        items:
+          type: object
+          additionalProperties: false
+          required: [number, title, beats, source_refs, estimated_seconds, emotions, turn, end_hook, major_turn, retention_checkpoint, characters, locations, entities]
+          properties:
+            number: {type: integer, minimum: 1}
+            title: *text
+            beats: {type: array, minItems: 1, uniqueItems: true, items: *text}
+            source_refs: *source_refs
+            estimated_seconds: *seconds
+            emotions: {type: array, minItems: 2, maxItems: 4, items: *text}
+            turn: *text
+            end_hook:
+              type: object
+              additionalProperties: false
+              required: [type, description]
+              properties:
+                type: &hook_type {type: string, enum: [danger_peak, pending_reveal, discovery_on_the_brink, reversal_setup, escalation, forced_decision, turning_line]}
+                description: *text
+            major_turn: {type: boolean}
+            retention_checkpoint: {type: boolean}
+            characters: *names
+            locations: *names
+            entities: *names
+      hooks:
+        type: array
+        minItems: 3
+        maxItems: 5
+        items:
+          type: object
+          additionalProperties: false
+          required: [key, label, score, expensive, taste]
+          properties:
+            key: *text
+            label: *text
+            score: &score {type: number, minimum: 0, maximum: 1}
+            expensive: {type: boolean}
+            taste: {type: boolean}
+      moments:
+        type: array
+        minItems: 1
+        items:
+          type: object
+          additionalProperties: false
+          required: [id, episode, beat_ids, summary, source_refs, key, amplify]
+          properties:
+            id: *text
+            episode: {type: integer, minimum: 1}
+            beat_ids: {type: array, minItems: 1, uniqueItems: true, items: *text}
+            summary: *text
+            source_refs: *source_refs
+            key: {type: boolean}
+            amplify: {type: boolean}
+  amplification:
+    type: object
+    additionalProperties: false
+    required: [versions, responses]
+    properties:
+      responses: *responses
+      versions:
+        type: array
+        minItems: 1
+        maxItems: 3
+        items:
+          type: object
+          additionalProperties: false
+          required: [key, label, text, gain, entities]
+          properties:
+            key: *text
+            label: *text
+            text: *text
+            gain: *text
+            entities: &story_entities
+              type: array
+              items:
+                type: object
+                additionalProperties: false
+                required: [name, kind, description, voice]
+                properties:
+                  name: *text
+                  kind: {type: string, enum: [character, location, prop, ui, voice]}
+                  description: *text
+                  voice: *string
+  payoff:
+    type: object
+    additionalProperties: false
+    required: [choice, reason, sharpened, entities, scores, findings]
+    properties:
+      choice: *text
+      reason: *text
+      sharpened: *text
+      entities: *story_entities
+      scores:
+        type: array
+        minItems: 1
+        items: {type: object, additionalProperties: false, required: [key, score], properties: {key: *text, score: *score}}
+      findings: {type: array, items: {type: object, additionalProperties: false, required: [severity, kind, location, evidence, problem, suggested_fix], properties: {severity: {type: string, enum: [blocker, major, minor]}, kind: {type: string, enum: [error, omission]}, location: *text, evidence: *text, problem: *text, suggested_fix: *text}}}
+  episode:
+    type: object
+    additionalProperties: false
+    required: [episode, script, ledger_out, hook_type, estimated_seconds, bible_additions, responses]
+    properties:
+      episode: {type: integer, minimum: 1}
+      script: *text
+      ledger_out: *text
+      hook_type: *hook_type
+      estimated_seconds: *seconds
+      bible_additions: *story_entities
+      responses: *responses
+  viewer:
+    type: object
+    additionalProperties: false
+    required: [keep_watching, reason, findings]
+    properties:
+      keep_watching: {type: boolean}
+      reason: *text
+      findings: {type: array, items: {type: object, additionalProperties: false, required: [severity, kind, location, evidence, problem, suggested_fix], properties: {severity: {type: string, enum: [blocker, major, minor]}, kind: {type: string, enum: [error, omission]}, location: *text, evidence: *text, problem: *text, suggested_fix: *text}}}

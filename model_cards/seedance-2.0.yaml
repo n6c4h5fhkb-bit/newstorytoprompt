@@ -1,0 +1,8 @@
+name: seedance-2.0
+max_seconds: 15
+refs: {images: 9, videos: 3, audio: 3}
+multi_shot: true
+timestamp_control: weak
+readable_text: unreliable
+native_audio: true
+verification: design-document-defaults-confirm-on-your-account

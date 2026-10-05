@@ -1,0 +1,71 @@
+# Track only reviewed application sources, fixtures and public documentation.
+# Unlisted files at the workspace root remain local by default.
+/*
+!/.gitignore
+!/.gitattributes
+!/README.md
+!/cli.py
+!/config.yaml
+!/pyproject.toml
+!/StoryForge Lite — Platform Design Document.md
+!/platform/
+!/skills/
+!/tests/
+!/model_cards/
+!/docs/
+
+# Runtime evidence may contain source text, personal paths and account metadata.
+/docs/*
+!/docs/implementation.md
+!/docs/requirements-audit.md
+!/docs/prompt-design.md
+!/docs/m0-validation.md
+!/docs/api-config.example.yaml
+/docs/local/
+/projects/
+/.runtime/
+/.runtime-test-*
+
+# Local environments, caches, logs and generated packages.
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+.cache/
+.runtime/
+.test-output/
+logs/
+*.log
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.db
+*.zip
+*.tmp
+*.bak
+
+# Credentials and machine-specific settings, including inside allowed folders.
+.env
+.env.*
+.codex/
+.agents/
+.aws/
+auth.json
+credentials.json
+credentials.yaml
+credentials.yml
+secrets.json
+secrets.yaml
+secrets.yml
+config.local.*
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_ed25519
+.DS_Store
+Thumbs.db

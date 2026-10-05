@@ -1,0 +1,26 @@
+reference_line: '$placeholder：$name，$role；$description；$position。'
+prompt: |-
+  $label｜生成总时长：$seconds秒
+
+  $style_lock
+
+  表演重点：$performance
+
+  环境与光线：$environment
+
+  空间锚：$spatial_anchors $continuation
+
+  参考职责（由用户配图）：
+  $manifest
+  人物姿势与取景按镜头，不照搬参考图构图。
+  人物、道具图和尾帧中的同一物件只算一件，数量、佩戴、持有与开合按下列镜头，不因多张参考新增一份。
+  资产设定表中的头部特写、三视图和四宫格只供识别，视频不出现拼版或分屏。
+
+  $audio_line
+
+  $shots
+
+  约束：$negative
+audio_none: '不加字幕、水印或背景音乐，只用下列对白、音效与环境声。需要界面时生成空白面板，文字后期添加。'
+audio_cue: '不加字幕或水印；使用下列对白、音效与环境声，配乐使用 $music。需要界面时生成空白面板，文字后期添加。'
+roles: {character: 只定身份与衣装, location: 只定固定布局与空间材质, prop: 只定外形与材质，状态按镜头, ui: 只定界面外形，文字后期添加, voice: 只定音色，发声方式按镜头, music: 只定配乐, layout: 只定布局与色彩, previous_frame: 延续上一段已保留视频的实际状态}

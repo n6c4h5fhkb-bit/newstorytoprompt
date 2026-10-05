@@ -1,0 +1,1 @@
+{"writer_key":"unit_prompt:ep01:S01","mutations":[{"path":["prompts",0,"shots"],"value":"空间锚固定在桌端通路，镜头展示三人站立。"}],"expected":"Pipeline jargon"}

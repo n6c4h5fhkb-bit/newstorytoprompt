@@ -1,0 +1,19 @@
+A1: {handler: import_novel, checks: [source]}
+A2: {handler: summaries, role: chunk_summarizer, tier: cheap, schema: chunk_summary, checks: [source_refs], reviewers: []}
+A3: {handler: breakdown, role: breakdown, tier: strong, schema: breakdown, checks: [source_refs], reviewers: []}
+A4: {handler: adaptation, role: adapt_plan, tier: strong, schema: adaptation_plan, checks: [beat_coverage, source_refs, hooks], reviewers: [plan_reviewer]}
+A5: {handler: direction, checkpoint: conditional_direction}
+A6: {handler: amplify, role: amplify, tier: strong, schema: amplification, checks: [variant_count], reviewers: [payoff_judge]}
+A7: {handler: first_episode, role: episode_writer, tier: strong, schema: episode, checks: [episode], reviewers: [viewer, story_check]}
+A8: {handler: episode_approval, checkpoint: first_episode}
+A9: {handler: remaining_episode, role: episode_writer, tier: strong, schema: episode, checks: [episode], reviewers: [viewer, story_check]}
+A10: {handler: lock_episode, checks: [episode, review_pass]}
+B1: {handler: art_direction, role: art_director, tier: strong, schema: style, checks: [style], reviewers: []}
+B2: {handler: asset_extract, role: asset_extract, tier: cheap, schema: assets, checks: [assets], reviewers: []}
+B3: {handler: asset_briefs, role: asset_prompt, tier: cheap, schema: brief, checks: [brief], reviewers: []}
+B4: {handler: look_approval, checkpoint: look}
+B5: {handler: storyboard, role: storyboard, tier: strong, schema: storyboard, checks: [storyboard], reviewers: [scene_fidelity]}
+B6: {handler: reference_mapping, checks: [references]}
+B7: {handler: unit_prompts, role: unit_prompt, tier: strong, schema: prompts, checks: [prompts], reviewers: []}
+B8: {handler: reconstruction, reviewers: [reconstruction_blind, reconstruction_compare]}
+B9: {handler: delivery}
