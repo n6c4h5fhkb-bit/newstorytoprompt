@@ -52,6 +52,25 @@ class Director:
     def marker(self, stage: str) -> str:
         return f".state/stages/{self.episode}_{stage}.json"
 
+    def revision(self, stage: str, target: str) -> dict | None:
+        """A pending user-requested rewrite (sfl rerun --note), consumed once the new result is saved."""
+        request = self.store.json(f".state/revision_requests/{stage}_{target}.json")
+        return request if request and not request.get("applied") else None
+
+    def finish_revision(self, stage: str, target: str):
+        path = f".state/revision_requests/{stage}_{target}.json"
+        self.store.write(path, {**self.store.json(path), "applied": True}, json_data=True)
+
+    @staticmethod
+    def revision_repairs(request: dict, previous) -> dict:
+        # A fresh retry_id makes the call miss the cache, so a rerun never returns the identical saved answer.
+        repairs = {"retry_id": request["id"]}
+        if request.get("note"):
+            repairs["user_note"] = {"choice": "retry", "note": request["note"]}
+            if previous is not None:
+                repairs["previous_output"] = previous
+        return repairs
+
     def art_direction(self, stage: str):
         rejected = [c for c in self.runner.cards.list(include_resolved=True) if c["kind"] == "checkpoint" and c["stage"] == "B4"
                     and c["answer"] and c["answer"]["choice"] == "reject" and not self.store.path(f".state/look_revisions/{c['id']}.json").exists()]
@@ -89,8 +108,9 @@ class Director:
                 prefix = rules()["asset_id_prefixes"][asset["type"]]
                 asset_id = prefix + ":" + asset["name"] + ("@" + asset["variant"] if asset["variant"] else "")
                 old = result.get(asset_id, {})
-                row = {"id": asset_id, **{k: asset[k] for k in ("type", "name", "parent", "what_changed", "placeholder", "description")},
+                row = {"id": asset_id, **{k: asset[k] for k in ("type", "name", "parent", "what_changed", "placeholder", "description", "identity_notes")},
                        "image_prompt": "", "status": "needed"}
+                # identity_notes only shortens the prompt's reference line; it never invalidates a finished brief.
                 if all(old.get(k) == row[k] for k in ("type", "name", "parent", "what_changed", "placeholder", "description")):
                     row.update(image_prompt=old["image_prompt"], status=old["status"])
                 result[asset_id] = row
@@ -98,7 +118,8 @@ class Director:
         def validate(value):
             merged_rows = merged(value, rows)
             available = {r["id"] for r in merged_rows} | {r["placeholder"] for r in merged_rows}
-            return asset_rows(merged_rows, self.bible) + [f"Requested asset still missing: {request}" for request in requests if request not in available]
+            missing_notes = [a["placeholder"] for a in value["assets"] if a["type"] in ("character", "location", "prop") and not a["identity_notes"].strip()]
+            return asset_rows(merged_rows, self.bible) + [f"identity_notes required for {placeholder}" for placeholder in missing_notes] + [f"Requested asset still missing: {request}" for request in requests if request not in available]
         self.runner.work(stage, self.episode, sources,
             validate,
             lambda value, store: {"assets.csv": Store.assets_text(merged(value, store.assets())),
@@ -243,6 +264,9 @@ class Director:
             self.asset_briefs("B3")
             self.look_approval("B4")
             self.store.write(retry_path,{"applied":True},json_data=True)
+        request = self.revision("B5", self.episode) if repairs is None else None
+        if request:
+            repairs, force = self.revision_repairs(request, self.store.json(path)), True
         if not force and self.store.current(path):
             return
         script_notes = []
@@ -270,6 +294,8 @@ class Director:
             try:
                 self.runner.work(stage, self.episode, sources, validate, output,
                     reviewer=self.scene_reviews if "scene_fidelity" in self.runner.stages[stage]["reviewers"] else None, repairs=repairs)
+                if request:
+                    self.finish_revision("B5", self.episode)
                 return
             except MissingAssets as exc:
                 self.store.write(f".state/asset_requests/{self.episode}.json", exc.ids, json_data=True)
@@ -371,6 +397,13 @@ class Director:
         for scene in self.script.scenes:
             if scene_id is not None and scene.id!=scene_id:
                 continue
+            if repairs is None:
+                for unit in board["units"]:
+                    if unit["scene"] == scene.id and (only is None or unit["id"] in only) and self.revision("B7", unit["id"]):
+                        fragment = self.store.json(f".state/fragments/{unit['id']}.json")
+                        previous = {k: v for k, v in fragment.items() if k != "responses"} if fragment else None
+                        self.unit_prompts(stage, only=[unit["id"]], repairs=self.revision_repairs(self.revision("B7", unit["id"]), previous), scene_id=scene.id)
+                        self.finish_revision("B7", unit["id"])
             units = [u for u in board["units"] if u["scene"] == scene.id and (only is None or u["id"] in only)
                      and (repairs or not self.store.current(f"prompts/{self.episode}/{u['id'].split('_')[1]}.md"))]
             if not units:
@@ -463,7 +496,11 @@ class Director:
                     warnings=Source(prompt_warnings, []))
                 unit_binding = self.store.binding(f"storyboard/{self.episode}.json", {"kind": "unit", "id": uid})
                 sources.update(reconstruction=Source("", []), unit=Source(unit, [unit_binding]))
-                bindings = build(self.store, "reconstruction_blind", sources).bindings
+                # The blind reader may only see warnings that can be read off the prompt text itself;
+                # shot-level ones (speech fit, overlays, runtime) come from the storyboard.
+                blind_kinds = rules()["blind_warning_kinds"]
+                blind_sources = {**sources, "warnings": Source([w for w in prompt_warnings if w["kind"] in blind_kinds], [])}
+                bindings = build(self.store, "reconstruction_blind", blind_sources).bindings
                 bindings += build(self.store, "reconstruction_compare", sources).bindings
                 bindings += external_source(self.store, ROOT / "platform/schemas.yaml", style_reference=True).bindings
                 bindings += external_source(self.store, ROOT / "skills/shared/check_rules.yaml", style_reference=True).bindings
@@ -475,7 +512,7 @@ class Director:
                     else:
                         responses = self.store.json(f".state/fragments/{uid}.json", {}).get("responses", [])
                         challenges = [r for r in responses if r["disposition"] == "reject"]
-                        blind = self.runner.review("reconstruction_blind", "reconstruction", stage, uid, sources)
+                        blind = self.runner.review("reconstruction_blind", "reconstruction", stage, uid, blind_sources)
                         sources["reconstruction"] = Source(blind["description"], bindings)
                         compared = self.runner.review("reconstruction_compare", "findings", stage, uid, sources, challenge=challenges)
                         findings = blind["findings"] + compared["findings"]

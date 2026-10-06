@@ -60,6 +60,7 @@ def plan_text(value):
     for ep in value["episodes"]:
         fields = [f"ep{ep['number']:02d}",ep["title"],str(ep["estimated_seconds"]),"、".join(ep["emotions"]),ep["turn"],ep["end_hook"]["type"]+"："+ep["end_hook"]["description"],"是" if ep["major_turn"] else "", "是" if ep["retention_checkpoint"] else "","、".join(ep["source_refs"]),"、".join(ep["beats"])]
         text += "| " + " | ".join(clean_cell(f) for f in fields) + " |\n"
+    text += "\n## 分集对抗与改编点\n\n" + "\n".join(f"- ep{ep['number']:02d} 对抗：{ep['conflict']}\n" + "\n".join(f"  - 改编：{c}" for c in ep["changes"]) for ep in value["episodes"]) + "\n"
     text += "\n## 剪合决定\n\n" + "\n".join(f"- {d['beat_id']}：{d['action']} {d['merge_into']} · {d['reason']}" for d in value["decisions"]) + "\n"
     text += "\n## 开篇候选\n\n" + "\n".join(f"- {h['key']}：{h['label']} · {h['score']:g}" for h in value["hooks"]) + f"\n\n选择：{value['selected_hook']} · {value['reason']}\n"
     text += "\n## 关键与放大时刻\n\n" + "\n".join(f"- {m['id']} · ep{m['episode']:02d} · {'关键' if m['key'] else '普通'} · {m['summary']} · {'、'.join(m['source_refs'])}" for m in value["moments"]) + "\n"

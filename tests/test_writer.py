@@ -10,6 +10,7 @@ from storyforge.config import SflError
 from storyforge.packets import Source, build
 from storyforge.runner.source import split
 from storyforge.runner.service import note, inbox
+from storyforge.runner.writer import plan_text
 
 
 class WriterTests(unittest.TestCase):
@@ -45,6 +46,10 @@ class WriterTests(unittest.TestCase):
         with self.assertRaises(SflError):require(clean,schema_for("adaptation_plan"))
         clean = plan(); clean["episodes"][0]["emotions"] *= 3
         with self.assertRaises(SflError):require(clean,schema_for("adaptation_plan"))
+        for field,value in (("changes",[]),("changes",["a","b","c","d"]),("conflict","")):
+            clean = plan(); clean["episodes"][0][field] = value
+            with self.subTest(field=field,value=value),self.assertRaises(SflError):require(clean,schema_for("adaptation_plan"))
+        self.assertIn("改编：原文私下交易", plan_text(plan(1)))
 
     def test_plan_rejects_unparseable_bible_and_unregistered_plan_names(self):
         index = split(self.store.text("source/novel.txt"))

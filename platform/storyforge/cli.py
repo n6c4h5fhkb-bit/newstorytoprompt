@@ -60,9 +60,10 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("target")
     p.add_argument("--user-minutes",type=float,help="Cumulative human minutes for the whole episode")
     p.add_argument("--note",default="")
-    p = commands.add_parser("rerun")
+    p = commands.add_parser("rerun", help="Regenerate a stage result; with --note, revise the B5 storyboard or a B7 unit prompt per the note")
     p.add_argument("stage")
     p.add_argument("target")
+    p.add_argument("--note", default="", help="What to change (B5 target epNN, B7 target epNN_uNN)")
     p = commands.add_parser("revert")
     p.add_argument("target")
     p.add_argument("snapshot")
@@ -167,7 +168,7 @@ def dispatch(args):
         service.finish_episode(store,args.target,user_minutes=args.user_minutes,note=args.note)
         return service.metrics(store)
     if command == "rerun":
-        return service.rerun(store, args.stage, args.target)
+        return service.rerun(store, args.stage, args.target, args.note)
     if command == "revert":
         store.revert(args.target, args.snapshot)
         return {"reverted": args.target, "snapshot": args.snapshot}

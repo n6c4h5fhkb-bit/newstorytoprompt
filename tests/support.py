@@ -21,7 +21,7 @@ def outfit_child():
     """A genuine appearance variant used only in parent-dependency tests."""
     asset = {"type":"character", "name":"云清禾", "variant":"换装", "parent":"char:云清禾",
         "what_changed":"灰白旧裙换为深蓝交领长裙，身份、发型与比例不变",
-        "placeholder":"@云清禾_换装", "description":"云清禾的同一身份与身形，仅换为深蓝交领长裙；双腕空，不持道具"}
+        "placeholder":"@云清禾_换装", "description":"云清禾的同一身份与身形，仅换为深蓝交领长裙；双腕空，不持道具", "identity_notes":"同一人物，深蓝交领长裙"}
     brief = {"brief":"引用 @云清禾_母图，仅将灰白旧裙换为深蓝交领长裙；保留同一脸、发型、比例和设定表排版，双腕空，不添加道具。", "responses":[]}
     return asset, brief
 

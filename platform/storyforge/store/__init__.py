@@ -21,7 +21,7 @@ import yaml
 from storyforge.config import SflError
 from storyforge.checks.parsers import bible_slice
 
-ASSET_COLUMNS = ["id", "type", "name", "parent", "what_changed", "image_prompt", "placeholder", "status", "description"]
+ASSET_COLUMNS = ["id", "type", "name", "parent", "what_changed", "image_prompt", "placeholder", "status", "description", "identity_notes"]
 CREATIVE_PATHS = ("source", "summaries", "bible.md", "style.md", "breakdown.md", "breakdown.json", "plan.md", "plan.json", "amplified", "ledger", "episodes", "storyboard", "assets.csv", "refs", "prompts", "delivery", "notes", "findings", ".state/examples", ".state/script_reviews", ".state/direction.json", ".state/locks.json")
 _mutexes: dict[str, threading.RLock] = {}
 _mutex_guard = threading.Lock()
@@ -488,7 +488,7 @@ def target_paths(target: str) -> list[str]:
     if target == "project":
         return list(CREATIVE_PATHS)
     if re.fullmatch(r"ep\d{2,}", target):
-        return [f"episodes/{target}.md", f"storyboard/{target}.json", f"refs/{target}.json", f"prompts/{target}", f"delivery/{target}"]
+        return [f"episodes/{target}.md", f"ledger/{target}.md", f".state/script_reviews/{target}.json", f"storyboard/{target}.json", f"refs/{target}.json", f"prompts/{target}", f"delivery/{target}"]
     if re.fullmatch(r"ep\d{2,}_u\d{2,}", target):
         episode, unit = target.split("_")
         return [f"prompts/{episode}/{unit}.md", f"delivery/{episode}/{unit}.md"]

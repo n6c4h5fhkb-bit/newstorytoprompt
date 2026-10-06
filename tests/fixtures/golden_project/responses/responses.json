@@ -15,7 +15,8 @@
         "parent": "",
         "what_changed": "",
         "placeholder": "@林恒_母图",
-        "description": "成年青年男子，约1.78m，清瘦平直肩背；窄长脸、平直浓眉、深褐眼睛，墨黑短碎发向右分开；深炭灰交领窄袖粗麻布衣、暗褐布裤，领袖轻微磨白，无佩饰"
+        "description": "成年青年男子，约1.78m，清瘦平直肩背；窄长脸、平直浓眉、深褐眼睛，墨黑短碎发向右分开；深炭灰交领窄袖粗麻布衣、暗褐布裤，领袖轻微磨白，无佩饰",
+        "identity_notes": "成年男子，约1.78m，墨黑短碎发，深炭灰粗麻交领衣"
       },
       {
         "type": "character",
@@ -24,7 +25,8 @@
         "parent": "",
         "what_changed": "",
         "placeholder": "@云清禾_母图",
-        "description": "成年青年女子，约1.65m，纤细窄肩；长椭圆脸、细长眉、青绿眼睛，墨黑长发低束、右颊一缕碎发；灰白交领旧麻布裙，裙摆破损有尘土，双腕空，不持物"
+        "description": "成年青年女子，约1.65m，纤细窄肩；长椭圆脸、细长眉、青绿眼睛，墨黑长发低束、右颊一缕碎发；灰白交领旧麻布裙，裙摆破损有尘土，双腕空，不持物",
+        "identity_notes": "成年女子，约1.65m，墨黑长发低束，青绿眼睛，灰白破旧麻裙"
       },
       {
         "type": "character",
@@ -33,7 +35,8 @@
         "parent": "",
         "what_changed": "",
         "placeholder": "@妖商_母图",
-        "description": "中年男子，约1.72m，敦实宽肩；宽方脸、厚眉、窄深褐眼睛、宽鼻翼，黑褐发后梳低束、额角少量灰发；土褐宽袖厚麻布长袍与暗褐布腰带，母图不持钥匙"
+        "description": "中年男子，约1.72m，敦实宽肩；宽方脸、厚眉、窄深褐眼睛、宽鼻翼，黑褐发后梳低束、额角少量灰发；土褐宽袖厚麻布长袍与暗褐布腰带，母图不持钥匙",
+        "identity_notes": "中年男子，约1.72m，宽方脸，土褐宽袖长袍"
       },
       {
         "type": "location",
@@ -42,7 +45,8 @@
         "parent": "",
         "what_changed": "",
         "placeholder": "@妖商店_母图",
-        "description": "空店，木柜台在画面右侧，门在左后方，货架沿后墙，白天"
+        "description": "空店，木柜台在画面右侧，门在左后方，货架沿后墙，白天",
+        "identity_notes": "空店，木柜台在画面右侧，门在左后方，货架沿后墙，白天"
       },
       {
         "type": "prop",
@@ -51,7 +55,8 @@
         "parent": "",
         "what_changed": "",
         "placeholder": "@道具_腕镣",
-        "description": "一副暗哑黑铁腕镣：两只成年手腕尺度的环扣，用一条短链相连；扣合可开闭，同一副从佩戴到取下落地，位置和开合按镜头，不含人体或备用腕镣"
+        "description": "一副暗哑黑铁腕镣：两只成年手腕尺度的环扣，用一条短链相连；扣合可开闭，同一副从佩戴到取下落地，位置和开合按镜头，不含人体或备用腕镣",
+        "identity_notes": "一副暗哑黑铁腕镣：两只成年手腕尺度的环扣，用一条短链相连"
       },
       {
         "type": "prop",
@@ -60,7 +65,8 @@
         "parent": "",
         "what_changed": "",
         "placeholder": "@道具_铜钥匙",
-        "description": "旧铜钥匙，开锁后放在木柜台上"
+        "description": "旧铜钥匙，开锁后放在木柜台上",
+        "identity_notes": "旧铜钥匙，开锁后放在木柜台上"
       },
       {
         "type": "layout",
@@ -69,7 +75,8 @@
         "parent": "",
         "what_changed": "",
         "placeholder": "@色卡",
-        "description": "灰青、土褐、墨黑、麻白四块纯色，无文字"
+        "description": "灰青、土褐、墨黑、麻白四块纯色，无文字",
+        "identity_notes": ""
       },
       {
         "type": "voice",
@@ -78,7 +85,8 @@
         "parent": "",
         "what_changed": "",
         "placeholder": "@林恒_声音",
-        "description": "年轻男声，冷静低声，台词直接"
+        "description": "年轻男声，冷静低声，台词直接",
+        "identity_notes": ""
       },
       {
         "type": "voice",
@@ -87,7 +95,8 @@
         "parent": "",
         "what_changed": "",
         "placeholder": "@云清禾_声音",
-        "description": "年轻女声，克制冷淡"
+        "description": "年轻女声，克制冷淡",
+        "identity_notes": ""
       },
       {
         "type": "voice",
@@ -96,7 +105,8 @@
         "parent": "",
         "what_changed": "",
         "placeholder": "@系统_声音",
-        "description": "冷静电子女声，无情绪起伏，无现场声源"
+        "description": "冷静电子女声，无情绪起伏，无现场声源",
+        "identity_notes": ""
       }
     ],
     "responses": []
@@ -150,6 +160,7 @@
         "id": "ep01_u01",
         "scene": "S01",
         "seconds": 12,
+        "performance": "林恒用一句简短命令让妖商开锁；云清禾获得行动自由后仍然戒备。表演落点在命令、开锁、腕镣落地和闭唇心声，不补感谢、争辩或安慰。",
         "assets": [
           "char:林恒",
           "char:云清禾",
@@ -227,6 +238,7 @@
         "id": "ep01_u02",
         "scene": "S01",
         "seconds": 12,
+        "performance": "林恒指门并叫云清禾跟随，云清禾先看门再离店；两人依次出门，不补微笑、牵手或对妖商的新对白。",
         "assets": [
           "char:林恒",
           "char:云清禾",
@@ -288,6 +300,7 @@
         "id": "ep01_u03",
         "scene": "S01",
         "seconds": 6,
+        "performance": "落点在两人离开后的空门口与妖商留在柜台后的状态；妖商只看门口，不追出去、不增加独白或夸张反应。",
         "assets": [
           "char:妖商",
           "loc:妖商店",

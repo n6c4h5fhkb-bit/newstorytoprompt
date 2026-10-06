@@ -30,7 +30,7 @@ schemas:
         items:
           type: object
           additionalProperties: false
-          required: [type, name, variant, parent, what_changed, placeholder, description]
+          required: [type, name, variant, parent, what_changed, placeholder, description, identity_notes]
           properties:
             type: {type: string, enum: [character, location, prop, ui, voice, music, layout]}
             name: *text
@@ -39,6 +39,7 @@ schemas:
             what_changed: *string
             placeholder: {type: string, pattern: '^@[\w\u4e00-\u9fff]+$'}
             description: *text
+            identity_notes: *string
   brief:
     type: object
     additionalProperties: false
@@ -60,11 +61,12 @@ schemas:
         items:
           type: object
           additionalProperties: false
-          required: [id, scene, seconds, assets, offscreen, absent, reference_exclusions, chain_from_previous, carry_in, carry_out, shots]
+          required: [id, scene, seconds, performance, assets, offscreen, absent, reference_exclusions, chain_from_previous, carry_in, carry_out, shots]
           properties:
             id: *text
             scene: *text
             seconds: &seconds {type: number, exclusiveMinimum: 0}
+            performance: *text
             assets: &names {type: array, items: *text, uniqueItems: true}
             offscreen: *names
             reference_exclusions:
@@ -273,7 +275,7 @@ schemas:
         items:
           type: object
           additionalProperties: false
-          required: [number, title, beats, source_refs, estimated_seconds, emotions, turn, end_hook, major_turn, retention_checkpoint, characters, locations, entities]
+          required: [number, title, beats, source_refs, estimated_seconds, emotions, turn, conflict, changes, end_hook, major_turn, retention_checkpoint, characters, locations, entities]
           properties:
             number: {type: integer, minimum: 1}
             title: *text
@@ -282,6 +284,8 @@ schemas:
             estimated_seconds: *seconds
             emotions: {type: array, minItems: 2, maxItems: 4, items: *text}
             turn: *text
+            conflict: *text
+            changes: {type: array, minItems: 1, maxItems: 3, items: *text}
             end_hook:
               type: object
               additionalProperties: false

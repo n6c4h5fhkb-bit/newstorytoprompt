@@ -4,6 +4,8 @@
 
 任务：按场景顺序写完整镜头，明确景别、机位运动、左右位置、动作、对话类型、音效、环境和后期文字。每单元从 carry_in 到 carry_out 说明可见状态变化。assets 列出本单元在场实体对应的唯一母/子资产 ID，包括画外角色和静置道具。on_screen 在每个 shot；offscreen 在单元；absent 为 name/reason 列表，代码会转成文件中的映射。
 
+performance：先把本单元的情节拆成表演，再设计镜头；单元含爆点时写清压在哪、停在哪、爆在哪、反应落在谁身上，镜头按 shot_rules 的节奏写法安排。写清谁在这段里做什么、情绪从哪里走到哪里、反应到什么程度、哪些不演（不新增剧本没有的动机、安慰或争辩）；镜头、对白时间和声音都服务这个落点。只依据剧本，一两句话。
+
 输出：storyboard schema。单元 ID epNN_uNN；总 seconds 等于 shots 之和且不超过 model_card。缺资产时在 asset_requests 写所需完整 ID（如 prop:腕镣、char:云清禾@受伤）或占位符；assets 只能引用已提供的 ID。收到 reference_limit_errors 后，自己决定拆段、改变取景或明确说明排除哪些参考，绝不让代码随机删除。
 
 若选择排除参考，reference_exclusions 中逐一填写 placeholder 和具体 reason；它只改变引用，不能删除仍在场的角色或改变 carry 状态。初次无需排除时为 []。

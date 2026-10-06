@@ -1,6 +1,6 @@
 from __future__ import annotations
 from storyforge.config import SflError
-from storyforge.checks import rules
+from storyforge.checks import prompt_parts, rules
 from storyforge.store import Store
 
 
@@ -62,16 +62,19 @@ def mapping_from_assets(all_assets: list[dict], unit: dict, config: dict, edits=
     if len(roots) != len(set(roots)):
         raise SflError("Reference edit selects both master and child; remove one explicitly")
     on_screen = {name for shot in unit["shots"] for name in shot["on_screen"]}
+    parts = prompt_parts()
+    positions = parts["positions"]
     result = []
     for row in selected:
-        position = "画内" if row["type"] == "character" and row["name"] in on_screen else "画外，身份参考" if row["type"] == "character" and row["name"] in unit["offscreen"] else "参考"
+        position = positions["on_screen"] if row["type"] == "character" and row["name"] in on_screen else positions["off_screen"] if row["type"] == "character" and row["name"] in unit["offscreen"] else positions["other"]
         result.append({"asset_id": row["id"], "placeholder": row["placeholder"], "type": row["type"], "name": row["name"],
-                       "description": row["description"], "position": position, "status": row["status"],
+                       "description": row["description"], "identity_notes": row.get("identity_notes") or row["description"], "position": position, "status": row["status"],
                        "category": rules()["reference_categories"][row["type"]], "asset_prompt": row["image_prompt"]})
     if (unit["chain_from_previous"] or tail_placeholder in added) and tail_placeholder not in excluded:
-        result.append({"asset_id": "external:previous_frame", "placeholder": tail_placeholder, "type": "layout", "name": "上段尾帧",
-                       "description": unit["carry_in"], "position": "用户保留的上一段视频尾帧，连续性参考", "status": "approved",
-                       "category": "images", "asset_prompt": "用户在自己的工具里选取实际尾帧"})
+        frame = parts["previous_frame"]
+        result.append({"asset_id": "external:previous_frame", "placeholder": tail_placeholder, "type": "layout", "name": frame["name"],
+                       "description": unit["carry_in"], "identity_notes": unit["carry_in"], "position": positions["previous_frame"], "status": "approved",
+                       "category": "images", "asset_prompt": frame["asset_prompt"]})
     return result
 
 

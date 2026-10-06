@@ -13,6 +13,10 @@ def rules() -> dict:
     return load_yaml(ROOT / "skills" / "shared" / "check_rules.yaml")
 
 
+def prompt_parts() -> dict:
+    return load_yaml(ROOT / "skills" / "director" / "taste" / "prompt_parts.yaml")
+
+
 def script_names(script, bible: dict) -> list[str]:
     errors = []
     known = known_names(bible)
@@ -159,14 +163,22 @@ def references(mapping: list[dict], card: dict) -> list[str]:
     return errors
 
 
+def prompt_body(text: str, mapping: list[dict]) -> str:
+    """The model-written part of a prompt: everything except the code-written reference manifest lines."""
+    manifest = tuple(r["placeholder"] + "：" for r in mapping)
+    return "\n".join(line for line in text.splitlines() if not line.startswith(manifest))
+
+
 def prompt(text: str, mapping: list[dict]) -> list[str]:
     mentioned = set(re.findall(r"@[\w\u4e00-\u9fff]+", text))
+    used = set(re.findall(r"@[\w\u4e00-\u9fff]+", prompt_body(text, mapping)))
     expected = {r["placeholder"] for r in mapping}
     errors = []
     if mentioned - expected:
         errors.append("Unmapped placeholders: " + ", ".join(sorted(mentioned - expected)))
-    if expected - mentioned:
-        errors.append("Unmentioned placeholders: " + ", ".join(sorted(expected - mentioned)))
+    # The manifest is written by code, so a mapped reference only counts as used when the model's own text names it.
+    if expected - used:
+        errors.append("Mapped placeholders never used in the prompt text (use each in the scene, sound or palette wording): " + ", ".join(sorted(expected - used)))
     for term in rules()["jargon"]:
         if term in text:
             errors.append(f"Pipeline jargon: {term}")
@@ -192,6 +204,11 @@ def warnings(board: dict, config: dict, prompts: dict[str, str] | None = None) -
         for word in rules()["ambiguous_words"]:
             if word in text:
                 result.append({"kind": "ambiguous_position", "target": unit["id"], "message": f"Ambiguous word: {word}"})
-        if "负面" in text and text.count("负面") > 1:
-            result.append({"kind": "negatives_in_shots", "target": unit["id"], "message": "Keep negatives in one final section"})
+        section = rules()["negative_section"]
+        shots = text.rsplit(section, 1)[0] if section in text else text
+        first_shot = re.search(r"^镜头\d", shots, re.M)
+        shots = shots[first_shot.start():] if first_shot else shots
+        found = [m for m in rules()["negative_markers"] if m in shots]
+        if found:
+            result.append({"kind": "negatives_in_shots", "target": unit["id"], "message": "Keep negatives in the final section: " + ", ".join(found)})
     return result

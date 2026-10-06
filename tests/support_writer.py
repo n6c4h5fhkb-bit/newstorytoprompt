@@ -31,7 +31,7 @@ def timeline(count=2):
 
 def plan(count=2):
     episodes = [{"number":n,"title":"开锁","beats":[f"b{n:02d}"],"source_refs":[f"ch{n:03d}:p0001"],"estimated_seconds":210,
-        "emotions":["愤怒","期待"],"turn":"云清禾摆脱束缚", "end_hook":{"type":"pending_reveal","description":"忠诚度为何为负？"},
+        "emotions":["愤怒","期待"],"turn":"云清禾摆脱束缚", "conflict":"林恒当众逼妖商交出钥匙，妖商一步步加价拖延", "changes":["原文私下交易 → 改为当众限时三十秒 → 加入旁观者和时限，压迫更直接"], "end_hook":{"type":"pending_reveal","description":"忠诚度为何为负？"},
         "major_turn":n%3==0,"retention_checkpoint":n%6==0,"characters":["林恒","云清禾","妖商"],"locations":["妖商店"],"entities":[]}
         for n in range(1,count+1)]
     moments = [{"id":f"m{n:02d}","episode":n,"beat_ids":[f"b{n:02d}"],"summary":"开锁后得到自由","source_refs":[f"ch{n:03d}:p0001"],

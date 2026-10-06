@@ -154,7 +154,15 @@ def finish_episode(store: Store, episode: str, *, user_minutes=None, note: str =
         store.append("feedback",record)
 
 
-def rerun(store: Store, stage: str, target: str):
+REWRITE_STAGES = ("B5", "B7")
+
+
+def rerun(store: Store, stage: str, target: str, note: str | None = None):
+    note = (note or "").strip()
+    if note and stage not in REWRITE_STAGES:
+        raise SflError("A rewrite note is supported for B5 (storyboard, target epNN) and B7 (prompt, target epNN_uNN)")
+    if note and not re.fullmatch(r"ep\d{2,}_u\d{2,}" if stage == "B7" else r"ep\d{2,}", target):
+        raise SflError("Use epNN_uNN for a B7 prompt note and epNN for a B5 storyboard note")
     index = store.json(".state/artifacts.json", {})
     affected = False
     for path, meta in index.items():
@@ -167,7 +175,10 @@ def rerun(store: Store, stage: str, target: str):
         raise SflError("No completed artifact matches this stage and target")
     store.write(".state/artifacts.json", index, json_data=True)
     store.stale_artifacts()
-    store.append("decisions", {"stage": stage, "target": target, "choice": "rerun", "by": "user"})
+    if stage in REWRITE_STAGES and (note or re.fullmatch(r"ep\d{2,}_u\d{2,}" if stage == "B7" else r"ep\d{2,}", target)):
+        request = {"id": "r_" + uuid.uuid4().hex, "time": now(), "note": note, "applied": False}
+        store.write(f".state/revision_requests/{stage}_{target}.json", request, json_data=True)
+    store.append("decisions", {"stage": stage, "target": target, "choice": "rerun", "by": "user", **({"note": note} if note else {})})
     number = int(re.match(r"ep(\d+)", target)[1]) if re.match(r"ep(\d+)", target) else None
     resume(store)
     return Runner(store).run(episodes=[number] if number else None, allow_stale=[target])

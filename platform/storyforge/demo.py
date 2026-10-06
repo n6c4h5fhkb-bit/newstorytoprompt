@@ -17,7 +17,7 @@ def preview(episode: str, config: dict) -> dict | None:
     assets = []
     for asset in extracted["assets"]:
         asset_id = rules()["asset_id_prefixes"][asset["type"]] + ":" + asset["name"] + ("@" + asset["variant"] if asset["variant"] else "")
-        assets.append({"id": asset_id, **{k: asset[k] for k in ("type", "name", "parent", "what_changed", "placeholder", "description")},
+        assets.append({"id": asset_id, **{k: asset[k] for k in ("type", "name", "parent", "what_changed", "placeholder", "description", "identity_notes")},
                        "image_prompt": values[f"asset_prompt:{episode}:asset:{asset_id}"]["brief"], "status": "described"})
     units = []
     for unit in board["units"]:

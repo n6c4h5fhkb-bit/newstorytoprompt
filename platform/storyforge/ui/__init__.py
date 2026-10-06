@@ -97,7 +97,7 @@ class Application:
             service.resume(store)
             return self.start(name, lambda: Runner(self.store(name)).run(until=until, episodes=episodes))
         if action == "rerun":
-            return self.start(name, lambda: service.rerun(self.store(name), body["stage"], body["target"]))
+            return self.start(name, lambda: service.rerun(self.store(name), body["stage"], body["target"], body.get("note")))
         raise SflError("Unknown action")
 
 

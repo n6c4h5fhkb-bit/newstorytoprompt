@@ -8,12 +8,19 @@ import zipfile
 
 from storyforge import ROOT
 from storyforge.config import SflError, configuration
-from storyforge.checks import prompt as check_prompt, references as check_references, warnings
+from storyforge.checks import prompt as check_prompt, prompt_parts, references as check_references, rules, warnings
 from storyforge.store import Store, digest, serialize
 
 
 def table_cell(text) -> str:
     return str(text).replace("|", "\\|").replace("\n", "<br>")
+
+
+def role_label(reference: dict) -> str:
+    labels = prompt_parts()["role_labels"]
+    if reference["asset_id"] == "external:previous_frame":
+        return labels["previous_frame"]
+    return labels["palette"] if reference["placeholder"] == rules()["palette_placeholder"] else labels[reference["type"]]
 
 
 def asset_sheet(store: Store, references: list[dict]) -> list[dict]:
@@ -121,7 +128,7 @@ def outputs(store: Store, episode: str, card: dict, *, config: dict | None = Non
             raise SflError("; ".join(errors))
         header = f"# {episode.upper()} · {short.upper()} · {unit['seconds']}s · 16:9\n\n## 参考映射\n\n"
         table = "| 占位符 | 职责 | 描述 | 位置/用途 |\n| --- | --- | --- | --- |\n"
-        table += "".join("| " + " | ".join(table_cell(r[k]) for k in ("placeholder", "type", "description", "position")) + " |\n" for r in mapping)
+        table += "".join("| " + " | ".join(table_cell(v) for v in (r["placeholder"], role_label(r), r["description"], r["position"])) + " |\n" for r in mapping)
         result[f"delivery/{episode}/{short}.md"] = header + table + "\n## 提示词\n\n" + text
         used.update({r["placeholder"]: r for r in mapping})
         for shot in unit["shots"]:
@@ -133,7 +140,7 @@ def outputs(store: Store, episode: str, card: dict, *, config: dict | None = Non
     assets = "# 资产与美术提示词\n\n" + store.text("style.md") + "\n\n# 资产清单\n\n"
     assets += "按下列顺序准备资产。先制作母资产，再基于母资产制作子资产；每段视频使用的参考以对应单元映射为准。\n\n"
     for row in asset_sheet(store, list(used.values())):
-        assets += f"## {row['placeholder']}\n\n- 类型：{row['type']}\n- 描述：{row['description']}\n"
+        assets += f"## {row['placeholder']}\n\n- 类型：{role_label(row)}\n- 描述：{row['description']}\n"
         if row["preparation_only"]:
             assets += "- 用途：供子资产制作使用的母资产\n"
         if row["parent_placeholder"]:

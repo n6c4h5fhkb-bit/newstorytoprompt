@@ -43,7 +43,7 @@ class PipelineTests(unittest.TestCase):
             self.assertIn("生成总时长：", text)
             self.assertIn("表演重点：", text)
             self.assertIn("环境与光线：", text)
-            self.assertIn("空间锚：", text)
+            self.assertIn("空间布局：", text)
             self.assertIn("参考职责（由用户配图）：", text)
             self.assertIn("镜头1｜约", text)
             self.assertIn("声音：", text)
@@ -214,7 +214,7 @@ class PipelineTests(unittest.TestCase):
         self.assertFalse(runner.run(until="B4")["waiting"])
         original = runner.client.codex_transport
         requested = {"type":"layout", "name":"站位", "variant":"", "parent":"", "what_changed":"",
-                     "placeholder":"@妖商店_站位", "description":"妖商在柜台后，林恒画面左，云清禾画面右"}
+                     "placeholder":"@妖商店_站位", "description":"妖商在柜台后，林恒画面左，云清禾画面右", "identity_notes":""}
         new_target = "ep01:asset:layout:站位"
         def addition(profile, packet, schema, **kwargs):
             if packet.role == "asset_prompt" and kwargs["target"] == new_target:

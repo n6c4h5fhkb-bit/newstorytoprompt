@@ -86,8 +86,34 @@ class CheckTests(unittest.TestCase):
         refs = [{"placeholder": "@甲_母图"}, {"placeholder": "@甲_声音"}]
         self.assertTrue(prompt("@甲_母图 @未映射_图", refs))
         self.assertFalse(prompt("@甲_母图 @甲_声音", refs))
-        self.assertFalse(prompt("@甲_母图 @甲_声音 空间锚：木门在左后方", refs))
+        self.assertTrue(prompt("@甲_母图 @甲_声音 空间锚：木门在左后方", refs))
+        self.assertFalse(prompt("@甲_母图 @甲_声音 空间布局：木门在左后方", refs))
         self.assertTrue(prompt("@甲_母图 @甲_声音 桌端通路", refs))
+
+    def test_reference_sync_ignores_the_code_written_manifest(self):
+        refs = [{"placeholder": "@甲_母图"}, {"placeholder": "@甲_声音"}]
+        manifest = "@甲_母图：甲，只定身份；年轻男子；画内。\n@甲_声音：甲，只定音色；低沉男声；参考。\n"
+        # Named only in the manifest: the model's own text never uses the references.
+        errors = prompt(manifest + "镜头1｜约5秒\n他走向门口。", refs)
+        self.assertIn("never used", "\n".join(errors))
+        self.assertFalse(prompt(manifest + "镜头1｜约5秒\n@甲_母图 走向门口。\n声音：@甲_声音 低声说话。", refs))
+
+    def test_negatives_inside_shots_warn_but_final_section_is_free(self):
+        board = deepcopy(RESPONSES["storyboard:ep01"])
+        uid = board["units"][0]["id"]
+        def kinds(text):
+            return {w["kind"] for w in warnings(board, self.config, {uid: text}) if w["target"] == uid}
+        self.assertIn("negatives_in_shots", kinds("镜头1｜约5秒\n不要出现字幕。\n约束：不加水印"))
+        self.assertNotIn("negatives_in_shots", kinds("镜头1｜约5秒\n她走向门口。\n约束：不要出现字幕，禁止多余人物"))
+        self.assertNotIn("negatives_in_shots", kinds("人物姿势与取景按镜头，避免拼版。\n镜头1｜约5秒\n她走向门口。\n约束：无"))
+
+    def test_storyboard_units_must_carry_a_performance_split(self):
+        board = deepcopy(RESPONSES["storyboard:ep01"])
+        self.assertFalse(validate(board, schema_for("storyboard")))
+        del board["units"][0]["performance"]
+        self.assertTrue(validate(board, schema_for("storyboard")))
+        board["units"][0]["performance"] = ""
+        self.assertTrue(validate(board, schema_for("storyboard")))
 
     def test_reference_limits_and_approval_are_hard_checks(self):
         refs = [{"placeholder": f"@图_{i}", "category": "images", "status": "approved", "description": "测试描述"} for i in range(10)]

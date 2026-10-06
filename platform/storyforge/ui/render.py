@@ -325,6 +325,7 @@ def episode(ctx, store, state):
                 field("累计人工用时（分钟，可选）", input_("user_minutes", "选填", type="number", min=0, step="any", **{"data-number": True})),
                 el("p", {"class": "muted"}, "按本单元累计填写；公共准备工作计入第一段。留空保留已有报告。"),
                 el("div", {"class": "actions"}, button("首轮保留", name="result", value="ok"), button("需要重做", secondary=True, name="result", value="redo")), unit=uid),
+                form(ctx, "rerun", field("按备注重写这一段 Prompt", area("note", "例如：镜头2改成慢推近景，林恒的台词放在最后一秒；其余保持。")), button("按备注重写", secondary=True), stage="B7", target=uid),
                 form(ctx, "note", field("采用的连续性变化（仅更新后续单元）", area("note", "例如：保留的片段里，她已坐在椅子上，腕镣留在地上。")), button("采用变化并记录", secondary=True), target=uid))))
     if any(u["delivered"] for u in data["units"]):
         m = state["metrics"]["per_episode"].get(ctx["episode"], {})

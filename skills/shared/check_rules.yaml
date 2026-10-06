@@ -10,8 +10,11 @@ reference_categories:
   layout: images
   voice: audio
   music: audio
-jargon: [收束状态, 桌端通路]
+jargon: [空间锚, 收束状态, 桌端通路]
 ambiguous_words: [近侧, 远侧, 初始状态]
+negative_markers: [负面, 禁止, 严禁, 不要, 避免, 不得, 切勿]
+blind_warning_kinds: [prompt_length, ambiguous_position, negatives_in_shots]
+negative_section: '约束：'
 palette_placeholder: '@色卡'
 continuation_placeholder: '@上段尾帧'
 hook_types: [Danger peak, Pending reveal, Discovery on the brink, Reversal setup, Escalation, Forced decision, Turning line]

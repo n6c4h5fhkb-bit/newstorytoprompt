@@ -78,7 +78,7 @@ python cli.py inbox my_drama
 
 人物与可拆卸道具优先分开。佩戴、持有、开合和落点用镜头状态描述，同一物件不因多张参考增加数量；显著换装、年龄或伤势仍可做子图。美术补充等待视觉确认，不作为新剧情事实。
 
-每段最终视频 Prompt 包含总时长、共用美术、表演重点、环境与光线、空间锚、参考职责和逐镜动作、对白时间、声音。完整规则见 [提示词设计](docs/prompt-design.md)。
+每段最终视频 Prompt 包含总时长、共用美术、表演重点、环境与光线、空间布局、参考职责和逐镜动作、对白时间、声音。完整规则见 [提示词设计](docs/prompt-design.md)。
 
 通过审查后，交付位于 `projects/my_drama/delivery/ep01/`：
 
@@ -95,12 +95,15 @@ python cli.py inbox my_drama
 python cli.py pause my_drama
 python cli.py --project my_drama note ep01 '强化结尾悬念，保留既定事实'
 python cli.py --project my_drama note ep01_u01 '她已坐下，同一件道具仍留在桌角'
-python cli.py --project my_drama rerun B7 ep01
+python cli.py --project my_drama rerun B7 ep01_u02 --note '镜头2改成慢推近景，其余保持'
+python cli.py --project my_drama rerun B5 ep01 --note '第一段拆成两个镜头'
 python cli.py export my_drama ep01
 python cli.py --project my_drama feedback ep01_u01 ok
 python cli.py --project my_drama feedback ep01_u02 redo --note '具体问题' --generations 2 --user-minutes 8
 python cli.py --project my_drama finish ep01 --user-minutes 35
 ```
+
+`rerun` 不带备注时会重新请求模型而不是取回缓存；B7（单元 Prompt，目标 `epNN_uNN`）和 B5（分镜，目标 `epNN`）可加 `--note`，模型在上一版基础上只改备注涉及的部分，网页分集页每段也有“按备注重写”。
 
 剧本问题交回编剧修改和审查；导演不自行改源剧本。连续性修改只影响后续单元，已有片段保持当前版本。变旧的已交付内容须明确选择重新生成。
 
