@@ -15,6 +15,12 @@ ambiguous_words: [近侧, 远侧, 初始状态]
 negative_markers: [负面, 禁止, 严禁, 不要, 避免, 不得, 切勿]
 blind_warning_kinds: [prompt_length, ambiguous_position, negatives_in_shots]
 negative_section: '约束：'
+placeholder_patterns:
+  character: {example: '@沈砚_母图 / @沈砚_受伤', master: '^@[^_@]+_母图$', child: '^@[^_@]+_(?!母图$|声音$)[^_@]+$'}
+  location: {example: '@宴厅_母图 / @宴厅_夜景', master: '^@[^_@]+_母图$', child: '^@[^_@]+_(?!母图$|声音$)[^_@]+$'}
+  prop: {example: '@道具_婚书 / @道具_婚书_撕开', master: '^@道具_[^_@]+$', child: '^@道具_[^_@]+_[^_@]+$'}
+  ui: {example: '@界面_系统面板', master: '^@界面_[^_@]+$', child: '^@界面_[^_@]+_[^_@]+$'}
+  voice: {example: '@沈砚_声音', master: '^@[^_@]+_声音$', child: '^@[^_@]+_声音$'}
 palette_placeholder: '@色卡'
 continuation_placeholder: '@上段尾帧'
 hook_types: [Danger peak, Pending reveal, Discovery on the brink, Reversal setup, Escalation, Forced decision, Turning line]

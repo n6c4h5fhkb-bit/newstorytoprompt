@@ -129,14 +129,17 @@ def outputs(store: Store, episode: str, card: dict, *, config: dict | None = Non
         header = f"# {episode.upper()} · {short.upper()} · {unit['seconds']}s · 16:9\n\n## 参考映射\n\n"
         table = "| 占位符 | 职责 | 描述 | 位置/用途 |\n| --- | --- | --- | --- |\n"
         table += "".join("| " + " | ".join(table_cell(v) for v in (r["placeholder"], role_label(r), r["description"], r["position"])) + " |\n" for r in mapping)
-        result[f"delivery/{episode}/{short}.md"] = header + table + "\n## 提示词\n\n" + text
+        notes = review.get("open_findings", [])
+        remarks = "\n## 审查提示（未解决的意见，生成前可参考）\n\n" + "\n".join(f"- {f['location']}：{f['problem']}" for f in notes) + "\n" if notes else ""
+        result[f"delivery/{episode}/{short}.md"] = header + table + "\n## 提示词\n\n" + text + ("\n" + remarks if remarks else "")
         used.update({r["placeholder"]: r for r in mapping})
         for shot in unit["shots"]:
             for overlay in shot["overlays"]:
                 overlays.append({"unit": uid, **overlay})
         all_warnings.extend(review.get("warnings", []))
         manifests.append({"id": uid, "seconds": unit["seconds"], "prompt_file": short + ".md", "prompt_fingerprint": digest(text),
-                          "mapping": mapping, "warnings": review.get("warnings", []), "review": "passed"})
+                          "mapping": mapping, "warnings": review.get("warnings", []), "review": "passed",
+                          "open_review_notes": [{"location": f["location"], "problem": f["problem"]} for f in review.get("open_findings", [])]})
     assets = "# 资产与美术提示词\n\n" + store.text("style.md") + "\n\n# 资产清单\n\n"
     assets += "按下列顺序准备资产。先制作母资产，再基于母资产制作子资产；每段视频使用的参考以对应单元映射为准。\n\n"
     for row in asset_sheet(store, list(used.values())):

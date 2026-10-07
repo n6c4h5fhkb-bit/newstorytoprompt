@@ -136,6 +136,50 @@ class CheckTests(unittest.TestCase):
         child = {**rows[0], "id": "char:云清禾@受伤", "parent": "missing", "what_changed": "左额受伤"}
         self.assertTrue(asset_rows(rows + [child], self.bible))
 
+    def test_a_voice_only_speaker_in_the_cast_needs_no_character_asset(self):
+        text = (FIXTURE / "ep01.md").read_text(encoding="utf-8")
+        text = text.replace("林恒：打开它。", "议价声（画外，门外）：三十文。")
+        bible = deepcopy(self.bible)
+        bible["Voices"]["议价声"] = {"speaker": "议价声", "voice profile": "未具名的交易声音"}
+        script = parse_script(complete_voice_cast(text, bible)[0])
+        board = deepcopy(RESPONSES["storyboard:ep01"])
+        assets = [{**a, "id": rules()["asset_id_prefixes"][a["type"]] + ":" + a["name"] + ("@" + a["variant"] if a["variant"] else ""),
+                   "status": "approved", "image_prompt": "测试描述"} for a in RESPONSES["asset_extract:ep01"]["assets"]]
+        for each in board["units"]:
+            each["offscreen"] = sorted(set(each["offscreen"]) | {"议价声"})
+        unit = board["units"][0]
+        errors = "\n".join(storyboard(board, script, bible, assets, self.card))
+        self.assertNotIn("议价声", errors)
+        self.assertNotIn("present cast missing", errors)
+        # An ordinary character with no asset is still caught.
+        unit["offscreen"] = sorted(set(unit["offscreen"]) | {"妖商"})
+        unit["assets"] = [a for a in unit["assets"] if a != "char:妖商"]
+        self.assertIn("present cast missing", "\n".join(storyboard(board, script, bible, assets, self.card)))
+
+    def test_runtime_is_estimated_from_the_script_not_trusted_from_the_model(self):
+        from storyforge.checks.writer import script_seconds, warnings as script_warnings
+        text = (FIXTURE / "ep01.md").read_text(encoding="utf-8")
+        seconds = script_seconds(text, self.config)
+        parsed = parse_script(text)
+        dialogue = sum(len(l["line"]) for s in parsed.scenes for l in s.lines if "who" in l)
+        other = sum(1 for s in parsed.scenes for l in s.lines if "who" not in l)
+        self.assertEqual(seconds, round(dialogue / self.config["speech_rate_chars_per_sec"] + other * self.config["action_seconds"]))
+        self.assertIn("runtime", {w["kind"] for w in script_warnings(seconds, self.config, "ep01")})
+        self.assertFalse([w for w in script_warnings(200, self.config, "ep01") if w["kind"] == "runtime"])
+
+    def test_placeholder_names_follow_the_convention(self):
+        base = {"id":"char:沈砚","type":"character","name":"沈砚","parent":"","what_changed":"","image_prompt":"测试","placeholder":"@沈砚_母图","status":"approved","description":"测试"}
+        bible = parse_bible("# Bible\n\n## Characters\n| name | role | look | voice | source name |\n| --- | --- | --- | --- | --- |\n| 沈砚 | 主角 | 青衫 | 冷 | 沈砚 |\n")
+        self.assertFalse(asset_rows([base], bible))
+        for placeholder in ("@沈砚", "@沈砚_声音", "@沈砚母图"):
+            with self.subTest(placeholder=placeholder):
+                self.assertIn("naming convention", "\n".join(asset_rows([{**base, "placeholder": placeholder}], bible)))
+        child = {**base, "id":"char:沈砚@受伤", "parent":"char:沈砚", "what_changed":"左额受伤", "placeholder":"@沈砚_受伤"}
+        self.assertFalse(asset_rows([base, child], bible))
+        self.assertTrue(asset_rows([base, {**child, "placeholder":"@沈砚_母图"}], bible))
+        palette = {"id":"layout:色卡","type":"layout","name":"色卡","parent":"","what_changed":"","image_prompt":"测试","placeholder":"@色卡","status":"approved","description":"测试"}
+        self.assertFalse(asset_rows([base, palette], bible))
+
     def test_storyboard_mechanical_checks_reject_independent_corruption(self):
         board = deepcopy(RESPONSES["storyboard:ep01"])
         assets = [{**a, "id": rules()["asset_id_prefixes"][a["type"]] + ":" + a["name"] + ("@" + a["variant"] if a["variant"] else ""),

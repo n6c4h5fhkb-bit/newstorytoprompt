@@ -158,7 +158,7 @@ class Runner:
             extra.append(self.store.binding("logs/decisions.jsonl", {"kind": "decision", "card_id": resolution["id"]}))
         bindings = packet.bindings + extra
         job = self.store.start_job(stage, target, bindings)
-        last, errors, findings = None, [], list(repairs.get("findings", []))
+        last, errors, findings, held = None, [], list(repairs.get("findings", [])), set()
         try:
             for attempt in range(self.config["fix_rounds"] + 1):
                 self.check_control()
@@ -194,11 +194,21 @@ class Runner:
                 repairs = {**repairs, "findings": actionable, "previous_output": last}
                 if held:
                     break
+            if last is not None and not errors and not held and self.config.get("fix_policy", {}).get("open_major", "card") == "accept" \
+                    and not any(f["severity"] == "blocker" for f in findings):
+                # Reviewers keep finding something new after every rewrite; majors that survive the fix rounds are recorded, not escalated.
+                open_findings = [f for f in findings if f["severity"] == "major"]
+                metadata = {"findings": findings, "reviewed": bool(reviewer), "open_findings": open_findings}
+                if not self.store.accept(job, stage, target, bindings, lambda s: outputs(last, s), metadata=metadata, output_scope=output_scope):
+                    raise StageBlocked("Inputs changed; result retained as stale candidate")
+                self.store.append("decisions", {"stage": stage, "target": target, "event": "open_findings_accepted", "choice": "accept",
+                                                "by": "code", "findings": [f["id"] for f in open_findings]})
+                return last
             state = {"candidate": last, "errors": errors, "findings": findings, "bindings": bindings}
             self.store.write(f".state/stuck/{job}.json", state, json_data=True)
             shown = [f for f in findings if f["severity"] == "blocker"] + [f for f in findings if f["severity"] != "blocker"][:5]
             card = self.cards.create(kind="stuck", stage=stage, target=target,
-                question=f"{stage} {target} 修复后仍需处理",
+                question=f"{spec.get('label', stage)}（{target}）自动修复后仍有问题",
                 options=[{"key": "retry", "label": "带备注重试"}, {"key": "stop", "label": "停止此项"}], recommended="retry",
                 reason="硬错误或独立审查问题仍存在", dedupe=f"stuck:{stage}:{target}:{digest(state)}",
                 details={"errors": errors, "findings": shown, "candidate_file": f".state/stuck/{job}.json"})

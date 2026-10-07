@@ -237,6 +237,32 @@ class PipelineTests(unittest.TestCase):
         self.assertIn("横屏站位参考", row["image_prompt"])
         self.assertEqual(sum(n for key,n in transport.counts.items() if key.startswith("asset_prompt:")), before)
 
+    def test_a_later_extraction_never_rewrites_a_finished_asset(self):
+        runner, transport = scripted_runner(self.store)
+        approve_look(runner)
+        self.assertFalse(runner.run(until="B4")["waiting"])
+        original = runner.client.codex_transport
+        def reworded(profile, packet, schema, **kwargs):
+            result = original(profile, packet, schema, **kwargs)
+            if packet.role == "asset_extract":
+                value = json.loads(result["text"])
+                for asset in value["assets"]:
+                    asset["description"] += "（模型换了一种说法）"
+                    asset["identity_notes"] = "换了说法的身份要点"
+                result["text"] = json.dumps(value, ensure_ascii=False)
+            return result
+        runner.client.codex_transport = reworded
+        before_rows = {a["id"]: dict(a) for a in self.store.assets()}
+        before = sum(n for key, n in transport.counts.items() if key.startswith("asset_prompt:"))
+        self.store.write(".state/asset_requests/ep01.json", [], json_data=True)
+        director = Director(runner, 1)
+        director.asset_extract("B2", force=True)
+        director.asset_briefs("B3")
+        after_rows = {a["id"]: a for a in self.store.assets()}
+        self.assertEqual({k: v["description"] for k, v in before_rows.items()}, {k: v["description"] for k, v in after_rows.items()})
+        self.assertEqual({k: v["status"] for k, v in before_rows.items()}, {k: v["status"] for k, v in after_rows.items()})
+        self.assertEqual(sum(n for key, n in transport.counts.items() if key.startswith("asset_prompt:")), before)
+
 
 if __name__ == "__main__":
     unittest.main()

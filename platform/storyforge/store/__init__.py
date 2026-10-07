@@ -81,7 +81,7 @@ def select_text(text: str, selector: dict):
             ids.update(d["beat_id"] for d in value["decisions"] if d["action"]=="merge" and d["merge_into"] in moment["beat_ids"])
             return sorted(ids)
         if kind=="beats":return [b for b in value["beats"] if b["id"] in selector["ids"]]
-        if kind=="script_notes":return [{key:row[key] for key in ("id","time","target","note","by","origin") if key in row} for row in value if row["target"]==selector["episode"]]
+        if kind=="script_notes":return [{key:row[key] for key in ("id","time","target","note","by","origin") if key in row} for row in value if row["target"]==selector["episode"] and row.get("status")!="dismissed"]
         if kind=="continuity":return [entry for target,entries in value.items() for entry in entries if int(target.split("_")[0][2:])<=selector["episode"]]
     return text
 

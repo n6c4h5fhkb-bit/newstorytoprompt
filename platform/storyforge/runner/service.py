@@ -12,7 +12,9 @@ from storyforge.store import Store, create_project, digest, serialize, now, atom
 from storyforge.runner import Runner, StageBlocked, import_episode, bind_adopted_script
 from storyforge.cards import Cards
 from storyforge.runner.metrics import production_metrics
+from storyforge.checks import prompt as check_prompt, references as check_references
 from storyforge.delivery import ready as delivery_ready
+from storyforge.packets import file_source
 from storyforge.delivery.prompts import style_parts, unit_label
 
 
@@ -182,6 +184,121 @@ def rerun(store: Store, stage: str, target: str, note: str | None = None):
     number = int(re.match(r"ep(\d+)", target)[1]) if re.match(r"ep(\d+)", target) else None
     resume(store)
     return Runner(store).run(episodes=[number] if number else None, allow_stale=[target])
+
+
+def adopt_prompt(store: Store, unit: str, text: str | None = None) -> dict:
+    """Make the user's own wording of a unit prompt current. With text, write it first; otherwise adopt the file as edited."""
+    if not re.fullmatch(r"ep\d{2,}_u\d{2,}", unit):
+        raise SflError("Use a unit such as ep01_u02")
+    episode, short = unit.split("_")
+    path = f"prompts/{episode}/{short}.md"
+    with store.locked():
+        index = store.json(".state/artifacts.json", {})
+        if path not in index:
+            raise SflError("This unit's prompt has not been generated yet")
+        references = store.json(f"refs/units/{unit}.json")
+        if not references:
+            raise SflError("This unit has no reference mapping yet")
+        candidate = text if text is not None else store.text(path)
+        if not candidate.strip():
+            raise SflError("A prompt cannot be empty")
+        candidate = candidate.rstrip("\n") + "\n"
+        errors = check_references(references, model_card(configuration(store.root))) + check_prompt(candidate, references)
+        if errors:
+            raise SflError("The prompt does not pass the hard checks: " + "; ".join(errors))
+        if digest(candidate) == index[path]["fingerprint"] and digest(store.text(path)) == index[path]["fingerprint"]:
+            raise SflError("The prompt is unchanged; nothing to adopt")
+        if text is not None:
+            store.write(path, candidate)
+        index[path]["fingerprint"], index[path]["stale"], index[path]["adopted"] = digest(candidate), False, True
+        store.write(".state/artifacts.json", index, json_data=True)
+        store.write(f".state/adopted/{unit}.json", {"fingerprint": digest(candidate), "time": now()}, json_data=True)
+        store.append("decisions", {"stage": "B7", "target": unit, "choice": "adopt", "by": "user", "event": "prompt_adopted"})
+        store.stale_artifacts()
+        store.snapshot(f"adopt prompt {unit}")
+    return {"adopted": unit, "needs_run": True}
+
+
+ASSET_FIELDS = ("description", "identity_notes", "image_prompt")
+
+
+def edit_asset(store: Store, placeholder: str, *, description=None, identity_notes=None, image_prompt=None) -> dict:
+    """Edit one asset's description, short identity notes or image prompt; prompts that use it become stale."""
+    values = {k: v.strip() for k, v in (("description", description), ("identity_notes", identity_notes), ("image_prompt", image_prompt)) if v is not None}
+    if not values:
+        raise SflError("Give at least one of description, identity_notes or image_prompt")
+    for key in ("description", "image_prompt"):
+        if key in values and not values[key]:
+            raise SflError(f"{key} cannot be empty")
+    with store.locked():
+        rows = store.assets()
+        row = next((r for r in rows if r["placeholder"] == placeholder), None)
+        if not row:
+            raise SflError("Unknown asset placeholder")
+        changed = {k: v for k, v in values.items() if (row.get(k) or "") != v}
+        if not changed:
+            raise SflError("Nothing to change")
+        look_was_current = store.current(".state/look.json")
+        row.update(changed)
+        if "image_prompt" in changed and row["status"] == "needed":
+            row["status"] = "described"
+        store.write("assets.csv", Store.assets_text(rows))
+        marker = f".state/asset_briefs/{digest(row['id'])[:24]}.json"
+        meta = store.json(".state/artifacts.json", {}).get(marker)
+        if meta and "description" in changed and "image_prompt" in changed:
+            # The new description was written together with its own prompt, so the saved brief stays current.
+            fields = ["id", "type", "name", "parent", "what_changed", "placeholder", "description"]
+            source = file_source(store, "assets.csv", {"kind": "assets", "ids": [row["id"]], "fields": fields})
+            parent = file_source(store, "assets.csv", {"kind": "assets", "ids": [row["parent"]], "fields": fields + ["image_prompt"]})
+            bindings = source.bindings + parent.bindings + file_source(store, "style.md").bindings
+            job = store.start_job("B3", f"{meta['target']}:asset:{row['id']}", bindings)
+            store.accept(job, "B3", meta["target"], bindings,
+                {marker: serialize({"asset_id": row["id"], "brief": row["image_prompt"], "source": "user_edit"}) + "\n"})
+        if look_was_current:
+            # Editing an asset is the user's own approval of it; do not ask for the look again.
+            look_meta = store.json(".state/artifacts.json", {}).get(".state/look.json", {})
+            ids = [a["id"] for a in rows if a["type"] == "character"]
+            bindings = [store.binding("style.md"), store.binding("assets.csv", {"kind": "assets", "ids": ids})]
+            job = store.start_job("B4", look_meta.get("target", "project"), bindings)
+            store.accept(job, "B4", look_meta.get("target", "project"), bindings, {".state/look.json": serialize(store.json(".state/look.json")) + "\n"})
+        store.append("decisions", {"stage": "B3", "target": row["id"], "choice": "edit_asset", "by": "user", "event": "asset_edited", "fields": sorted(changed)})
+        store.stale_artifacts()
+        store.snapshot(f"edit asset {placeholder}")
+    return {"edited": placeholder, "fields": sorted(changed), "needs_run": True}
+
+
+def history(store: Store, target: str | None = None, limit: int = 30) -> list[dict]:
+    """Snapshots the user can pass to sfl revert, newest first."""
+    from storyforge.store import target_paths
+    paths = ["--"] + target_paths(target) if target and target != "project" else []
+    output = store.git("log", f"-{int(limit)}", "--date=iso-strict", "--pretty=format:%h%x09%cd%x09%s", *paths, check=False)
+    return [dict(zip(("snapshot", "time", "message"), line.split("\t", 2))) for line in output.splitlines() if line.strip()]
+
+
+def dismiss_script_note(store: Store, note_id: str, reason: str = "") -> dict:
+    """The user rejects a pending script note (for example a reviewer's mistake); the writer and reviewers stop seeing it."""
+    with store.locked():
+        entries = store.json("notes/script_notes.json", [])
+        entry = next((n for n in entries if n["id"] == note_id), None)
+        if not entry:
+            raise SflError("Unknown script note")
+        if entry["status"] != "pending":
+            raise SflError("Only a pending script note can be dismissed")
+        entry["status"] = "dismissed"
+        store.write("notes/script_notes.json", entries, json_data=True)
+        store.write("notes/script_notes.md", "\n".join(f"- {n['target']}: {n['note'].replace(chr(10), ' ')}" for n in entries if n["status"] != "dismissed") + "\n")
+        # Nothing was ever built from a pending note, so dropping it must not make finished work stale.
+        index = store.json(".state/artifacts.json", {})
+        for meta in index.values():
+            for key in ("bindings", "job_bindings"):
+                for binding in meta.get(key, []):
+                    if binding["path"] == "notes/script_notes.json":
+                        binding["fingerprint"] = store.fingerprint(binding)
+        store.write(".state/artifacts.json", index, json_data=True)
+        store.append("decisions", {"event": "script_note_dismissed", "note_id": note_id, "target": entry["target"], "choice": "dismiss", "by": "user", "reason": reason})
+        store.stale_artifacts()
+        store.snapshot(f"dismiss script note {entry['target']}")
+    return {"dismissed": note_id, "target": entry["target"]}
 
 
 def note(store: Store, target: str, text: str) -> dict:

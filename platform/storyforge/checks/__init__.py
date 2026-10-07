@@ -20,12 +20,16 @@ def prompt_parts() -> dict:
 def script_names(script, bible: dict) -> list[str]:
     errors = []
     known = known_names(bible)
+    hint = (" — if this is an existing person, use exactly the bible name (" + "、".join(sorted(known - {"系统", "旁白"})) + "); "
+            "a genuinely new person must be added through bible_additions with a voice")
     for scene in script.scenes:
+        reported = set()
         for name in scene.cast + [l["who"] for l in scene.lines if "who" in l]:
-            if name not in known:
-                errors.append(f"{scene.id}: unknown character {name}")
+            if name not in known and name not in reported:
+                reported.add(name)
+                errors.append(f"{scene.id}: unknown character {name}{hint}")
         if scene.location not in bible["Locations"]:
-            errors.append(f"{scene.id}: unknown location {scene.location}")
+            errors.append(f"{scene.id}: unknown location {scene.location} — use a bible location ({'、'.join(sorted(bible['Locations']))}) or add it through bible_additions")
     return errors
 
 
@@ -45,6 +49,11 @@ def asset_rows(rows: list[dict], bible: dict) -> list[str]:
             errors.append(f"Unknown asset type {row.get('type')}")
         if not re.fullmatch(r"@[\w\u4e00-\u9fff]+", row.get("placeholder", "")):
             errors.append(f"Invalid placeholder {row.get('placeholder')}")
+        pattern = rules()["placeholder_patterns"].get(row.get("type"))
+        if pattern and row.get("placeholder") != rules()["palette_placeholder"]:
+            expected = pattern["child" if row.get("parent") else "master"]
+            if not re.fullmatch(expected, row.get("placeholder", "")):
+                errors.append(f"Placeholder {row.get('placeholder')} breaks the naming convention for {row.get('type')}{' variants' if row.get('parent') else ''}; use the form {pattern['example']}")
         if row.get("type") == "character" and row.get("name") not in known_names(bible):
             errors.append(f"Unknown character asset {row.get('name')}")
         if row.get("type") == "location" and row.get("name") not in bible["Locations"]:
@@ -121,8 +130,12 @@ def storyboard(board: dict, script, bible: dict, assets: list[dict], card: dict)
         if len(roots) != len(set(roots)):
             errors.append(f"{uid}: more than one version of an entity")
         mapped_characters = {a["name"] for a in selected if a["type"] == "character"}
-        if (onscreen | offscreen) - mapped_characters:
-            errors.append(f"{uid}: present cast missing from assets")
+        # A speaker listed only under Voices (an unseen old voice, a system) is heard through its voice asset, never drawn.
+        voice_only = set(bible.get("Voices", {})) - set(bible.get("Characters", {}))
+        lacking = (onscreen | offscreen) - mapped_characters - voice_only
+        if lacking:
+            errors.append(f"{uid}: present cast missing from assets: {', '.join(sorted(lacking))} — add their char: asset IDs to this unit's assets, "
+                          "or, if they have left the scene, list them under absent with a reason instead of offscreen")
         if not any(a["type"] == "location" and a["name"] == scene.location for a in selected):
             errors.append(f"{uid}: location missing from assets")
         for shot in shots:

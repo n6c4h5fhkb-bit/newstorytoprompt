@@ -103,4 +103,35 @@ class ScriptRoutingTests(unittest.TestCase):
         self.assertTrue(any(n["note"]==note["note"] for n in writer["script_notes"]))
 
 
+class OpenMajorPolicyTests(unittest.TestCase):
+    FINDING = {"severity":"major","kind":"error","location":"S01","evidence":"妖商站在柜台后","problem":"站位交代不够具体","suggested_fix":"补一句站位"}
+
+    def run_policy(self, policy):
+        temporary = tempfile.TemporaryDirectory(prefix="sfl-policy-")
+        self.addCleanup(temporary.cleanup)
+        store = create_project(Path(temporary.name)/"synthetic",{"name":"synthetic","demo":True,"fix_policy":{"open_major":policy}})
+        import_episode(store,SCRIPT,BIBLE,LEDGER)
+        def mutate(value,packet,target,count):
+            if packet.role=="scene_fidelity" and self.FINDING["evidence"] in packet.data["script_scene"]:
+                value["findings"] = [dict(self.FINDING)]
+        runner, model = writer_runner(store,mutate=mutate)
+        self.assertTrue(runner.run(until="B4")["waiting"])
+        runner.cards.answer(next(c for c in runner.cards.list() if c["stage"]=="B4")["id"],"approve")
+        runner.run(until="B5")
+        return store, runner
+
+    def test_default_policy_escalates_a_major_that_survives_the_rounds(self):
+        store, runner = self.run_policy("card")
+        self.assertTrue(any(c["kind"]=="stuck" and c["stage"]=="B5" for c in runner.cards.list()))
+        self.assertFalse(store.path("storyboard/ep01.json").exists())
+
+    def test_accept_policy_records_the_open_major_and_continues(self):
+        store, runner = self.run_policy("accept")
+        self.assertFalse([c for c in runner.cards.list() if c["kind"]=="stuck"])
+        self.assertTrue(store.current("storyboard/ep01.json"))
+        meta = store.json(".state/artifacts.json")["storyboard/ep01.json"]
+        self.assertEqual([f["problem"] for f in meta["open_findings"]],["站位交代不够具体"])
+        self.assertTrue(any(e.get("event")=="open_findings_accepted" for e in store.logs("decisions")))
+
+
 if __name__=="__main__":unittest.main()

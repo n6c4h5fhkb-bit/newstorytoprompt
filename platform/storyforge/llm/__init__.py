@@ -84,7 +84,7 @@ def http_post(url: str, headers: dict, body: dict, timeout: float) -> dict:
 
 
 class Client:
-    def __init__(self, store: Store, config: dict, *, transport=http_post, codex_transport=None):
+    def __init__(self, store: Store, config: dict, *, transport=http_post, codex_transport=None, claude_transport=None):
         self.store, self.config, self.transport = store, config, transport
         self.check_codex_login = codex_transport is None
         self._codex_ready = False
@@ -92,6 +92,10 @@ class Client:
             from storyforge.llm.codex_cli import run
             codex_transport = run
         self.codex_transport = codex_transport
+        if claude_transport is None:
+            from storyforge.llm.claude_cli import run as claude_run
+            claude_transport = claude_run
+        self.claude_transport = claude_transport
         self.semaphore = threading.BoundedSemaphore(config["concurrency"]["llm"])
         self._lock = threading.Lock()
         self._calls: dict[str, threading.Lock] = {}
@@ -122,7 +126,7 @@ class Client:
                     "cost": 0, "seconds": 0, "cached": True, "fingerprint": fingerprint,
                     "demo": bool(cached["log"].get("demo"))})
                 return self.parse(cached["text"], schema, cached.get("error"))
-            attempts = self.config.get("external_attempts", 3) if profile["provider"] == "codex_cli" else 1
+            attempts = self.config.get("external_attempts", 3) if profile["provider"] in ("codex_cli", "claude_cli") else 1
             if isinstance(attempts, bool) or not isinstance(attempts, int) or attempts < 1:
                 raise CallPaused("external_attempts must be a positive integer")
             for attempt in range(attempts):
@@ -159,6 +163,15 @@ class Client:
                     usage = result.get("usage") or {}
                     input_tokens, output_tokens = usage.get("input_tokens"), usage.get("output_tokens")
                     model = profile["model"]
+                elif profile["provider"] == "claude_cli":
+                    try:
+                        result = self.claude_transport(profile, packet, schema, stage=stage, target=target)
+                    except (OSError, subprocess.SubprocessError) as exc:
+                        result = {"error": "Claude CLI process failed; call usage may be incomplete", "usage": {}, "text": None}
+                    text, error = result.get("text") or "", result.get("error")
+                    usage = result.get("usage") or {}
+                    input_tokens, output_tokens = usage.get("input_tokens"), usage.get("output_tokens")
+                    model = profile["model"]
                 else:
                     url, headers, body = request_body(profile, packet, schema)
                     model = body["model"]
@@ -187,12 +200,17 @@ class Client:
                     text, input_tokens, output_tokens, error = extract_response(raw, profile.get("api", "responses"))
                 rates = profile.get("prices_per_million", {})
                 cost = 0 if profile["provider"] == "replay" else None
-                if input_tokens is not None and output_tokens is not None and all(rates.get(k) is not None for k in ("input", "output")):
+                if profile["provider"] == "claude_cli":
+                    cost = result.get("cost")
+                if cost is None and input_tokens is not None and output_tokens is not None and all(rates.get(k) is not None for k in ("input", "output")):
                     cost = (input_tokens * rates["input"] + output_tokens * rates["output"]) / 1_000_000
                 log = {"id": "call_" + uuid.uuid4().hex, "stage": stage, "target": target, "role": packet.role,
                        "model": model, "input_tokens": input_tokens, "output_tokens": output_tokens, "cost": cost,
                        "seconds": round(time.monotonic() - started, 4), "cached": False, "fingerprint": fingerprint,
                        "status": "output_error" if error else "received", "demo": profile["provider"] == "replay"}
+                if profile["provider"] == "claude_cli":
+                    log.update(provider="claude_cli", effort=profile.get("effort"), cached_input_tokens=usage.get("cached_input_tokens"),
+                               exit_code=result.get("exit_code"), attempt=attempt + 1)
                 if profile["provider"] == "codex_cli":
                     log.update(provider="codex_cli", effort=profile.get("effort", "high"),
                                cached_input_tokens=usage.get("cached_input_tokens"), exit_code=result.get("exit_code"),
@@ -202,7 +220,7 @@ class Client:
                 self.store.append("calls", log, unique_id=log["id"])
                 if not error and text:
                     atomic_write(self.store.path(f".cache/llm/{fingerprint}.json"), serialize(receipt))
-                if error and profile["provider"] == "codex_cli" and result.get("retryable") and attempt + 1 < attempts:
+                if error and profile["provider"] in ("codex_cli", "claude_cli") and result.get("retryable") and attempt + 1 < attempts:
                     time.sleep(2 ** min(attempt, 3))
                     continue
                 return self.parse(text, schema, error)

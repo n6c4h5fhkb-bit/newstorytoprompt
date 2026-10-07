@@ -23,7 +23,7 @@ prompt: |-
   约束：$negative
 audio_none: '不加字幕、水印或背景音乐，只用下列对白、音效与环境声。需要界面时生成空白面板，文字后期添加。'
 audio_cue: '不加字幕或水印；使用下列对白、音效与环境声，配乐使用 $music。需要界面时生成空白面板，文字后期添加。'
-roles: {character: 只定身份与衣装, location: 只定固定布局与空间材质, prop: 只定外形与材质，状态按镜头, ui: 只定界面外形，文字后期添加, voice: 只定音色，发声方式按镜头, music: 只定配乐, layout: 只定布局与色彩, previous_frame: 延续上一段已保留视频的实际状态}
+roles: {palette: 只定整体配色与色调，不是画面内容, character: 只定身份与衣装, location: 只定固定布局与空间材质, prop: 只定外形与材质，状态按镜头, ui: 只定界面外形，文字后期添加, voice: 只定音色，发声方式按镜头, music: 只定配乐, layout: 只定布局与色彩, previous_frame: 延续上一段已保留视频的实际状态}
 positions: {on_screen: 画内, off_screen: '画外，身份参考', other: 参考, previous_frame: '用户保留的上一段视频尾帧，连续性参考'}
 previous_frame: {name: 上段尾帧, asset_prompt: 用户在自己的工具里选取实际尾帧}
 role_labels: {character: 角色形象, location: 场景, prop: 道具, ui: 界面, voice: 音色, music: 配乐, layout: 布局, palette: 色卡, previous_frame: 上段尾帧}

@@ -6,6 +6,17 @@
 
 默认使用已登录的 **Codex CLI / `gpt-6-sol` / `high`**。每次 `codex exec` 使用独立文本包和 JSON Schema，不续接模型会话；配置在 [config.yaml](config.yaml)。平台只交付文本和待配图占位符，媒体生成、剪辑和发布由用户在外部工具完成。
 
+也可以改用已登录的 Claude Code CLI 作为模型：在项目的 `project.yaml`（或 `config.yaml`）里写
+
+```yaml
+models:
+  strong:   {provider: claude_cli, model: sonnet, effort: medium, timeout_seconds: 900}
+  cheap:    {provider: claude_cli, model: haiku, effort: low, timeout_seconds: 600}
+  reviewer: {provider: claude_cli, model: sonnet, effort: low,    timeout_seconds: 900}
+```
+
+每次调用是一次无工具、无会话、无设置的 `claude -p`（结构化输出），指令来自 `skills/`，调用记录和费用写入 `logs/calls.jsonl`。可用 `SFL_CLAUDE_COMMAND` 指定可执行文件。
+
 完整目标尚未完成。当前真实首集已经用户确认并锁定，美术方案和资产提取已完成；资产 Prompt 部分完成，最近一次因模型服务满载暂停。正式分镜、最终视频 Prompt 和真实生成反馈仍待完成。见 [验收核对](docs/requirements-audit.md)和 [实施说明](docs/implementation.md)。
 
 ## 安装与启动
@@ -97,11 +108,18 @@ python cli.py --project my_drama note ep01 '强化结尾悬念，保留既定事
 python cli.py --project my_drama note ep01_u01 '她已坐下，同一件道具仍留在桌角'
 python cli.py --project my_drama rerun B7 ep01_u02 --note '镜头2改成慢推近景，其余保持'
 python cli.py --project my_drama rerun B5 ep01 --note '第一段拆成两个镜头'
+python cli.py --project my_drama adopt ep01_u02          # 采纳你手改过的 prompts/ep01/u02.md（先过硬检查）
+python cli.py --project my_drama asset @云清禾_母图 --identity-notes '成年女子，青绿眼睛，灰白破裙'
+python cli.py history my_drama ep01                      # 列出可回滚的快照，再用 revert
 python cli.py export my_drama ep01
 python cli.py --project my_drama feedback ep01_u01 ok
 python cli.py --project my_drama feedback ep01_u02 redo --note '具体问题' --generations 2 --user-minutes 8
 python cli.py --project my_drama finish ep01 --user-minutes 35
 ```
+
+`config.yaml` 的 `fix_policy.open_major` 决定自动修复两轮后仍未解决的 major 意见怎么办：`card`（默认，出卡等你决定）或 `accept`（把意见记录下来继续走：分镜与剧本写入产物记录，文字重构审查写进交付的“审查提示”，blocker 和硬检查错误仍然出卡）。真实模型下审查几乎每一轮都会挖出新的次要点，建议在 `project.yaml` 里设 `accept`，见 [真实模型验证记录](docs/real-run-claude-cli.md)。场景审查给出的误判剧本意见可用 `dismiss <note_id>` 驳回（`notes/script_notes.json` 里找 id，网页分集页有“驳回这条意见”）。
+
+手改 Prompt：直接编辑 `prompts/epNN/uNN.md` 后运行 `adopt`（或在网页分集页“直接编辑这一段 Prompt”保存）。通过硬检查才会采纳；之后文字重构审查只记录意见，不再覆盖你的写法，需要时 `rerun --note` 会以你的版本为基础修改。`asset` 可单独改某个资产的描述、身份要点或生成 Prompt（网页分集页每个资产也有“修改这个资产”），用到它的 Prompt 会标为待更新，改动本身视为你对该资产的批准。
 
 `rerun` 不带备注时会重新请求模型而不是取回缓存；B7（单元 Prompt，目标 `epNN_uNN`）和 B5（分镜，目标 `epNN`）可加 `--note`，模型在上一版基础上只改备注涉及的部分，网页分集页每段也有“按备注重写”。
 

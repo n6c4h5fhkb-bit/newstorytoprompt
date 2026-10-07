@@ -83,6 +83,13 @@ class Application:
         if action == "finish":
             service.finish_episode(store,body["episode"],user_minutes=body.get("user_minutes"),note=body.get("note",""))
             return service.metrics(store)
+        if action == "dismiss_note":
+            return service.dismiss_script_note(store, body["note_id"], body.get("reason", ""))
+        if action == "edit_prompt":
+            return service.adopt_prompt(store, body["unit"], body["text"])
+        if action == "edit_asset":
+            return service.edit_asset(store, body["placeholder"], description=body.get("description"),
+                                      identity_notes=body.get("identity_notes"), image_prompt=body.get("image_prompt"))
         if action == "refs":
             edit(store, body["unit"], body["operation"], body["placeholder"])
             return {"edited": body["unit"]}

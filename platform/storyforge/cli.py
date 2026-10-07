@@ -9,6 +9,7 @@ from storyforge.config import SflError, configuration, model_card
 from storyforge.cards import Cards
 from storyforge.delivery import export
 from storyforge.llm.codex_cli import doctor
+from storyforge.llm.claude_cli import doctor as claude_doctor
 from storyforge.refs import edit
 from storyforge.runner import Runner, import_episode
 from storyforge.runner import service
@@ -70,6 +71,20 @@ def parser() -> argparse.ArgumentParser:
     p = commands.add_parser("note")
     p.add_argument("target")
     p.add_argument("text")
+    p = commands.add_parser("adopt", help="Adopt your own edit of a unit prompt file (prompts/epNN/uNN.md) after it passes the hard checks")
+    p.add_argument("unit_id")
+    p = commands.add_parser("asset", help="Edit one asset's description, short identity notes or image prompt")
+    p.add_argument("placeholder")
+    p.add_argument("--description")
+    p.add_argument("--identity-notes", dest="identity_notes")
+    p.add_argument("--image-prompt", dest="image_prompt")
+    p = commands.add_parser("history", help="List snapshots usable with revert")
+    p.add_argument("project")
+    p.add_argument("target", nargs="?", default="project")
+    p.add_argument("--limit", type=int, default=30)
+    p = commands.add_parser("dismiss", help="Reject a pending script note (id from notes/script_notes.json), e.g. a reviewer's mistake")
+    p.add_argument("note_id")
+    p.add_argument("--reason", default="")
     p = commands.add_parser("pause")
     p.add_argument("project")
     p = commands.add_parser("inbox")
@@ -87,6 +102,10 @@ def select(args) -> Store:
     candidates = [p for p in args.projects_dir.glob("*") if p.is_dir() and (p / "project.yaml").exists()]
     if hasattr(args, "card_id"):
         candidates = [p for p in candidates if any(c["id"] == args.card_id for c in Cards(Store(p), configuration(p)).list(include_resolved=True))]
+    elif hasattr(args, "placeholder") and not hasattr(args, "operation"):
+        candidates = [p for p in candidates if any(a["placeholder"] == args.placeholder for a in Store(p).assets())]
+    elif hasattr(args, "note_id"):
+        candidates = [p for p in candidates if any(n["id"] == args.note_id for n in (Store(p).json("notes/script_notes.json", [])))]
     elif hasattr(args, "unit_id") or hasattr(args, "target"):
         target = getattr(args, "unit_id", None) or args.target
         episode = target.split("_")[0].split(":")[0]
@@ -128,13 +147,21 @@ def dispatch(args):
         return serve(args.projects_dir, args.port)
     if command == "doctor":
         config = configuration()
-        return {"roles": {tier: doctor(profile) if profile["provider"] == "codex_cli" else {"provider": profile["provider"]}
+        return {"roles": {tier: doctor(profile) if profile["provider"] == "codex_cli" else claude_doctor(profile) if profile["provider"] == "claude_cli" else {"provider": profile["provider"]}
                           for tier, profile in config["models"].items()}, "token_budget": config["token_budget"]}
     if command in ("new", "demo"):
         store = service.new(args.project, args.projects_dir, novel=getattr(args, "novel", None),
                             model=getattr(args, "model", "seedance-2.0"), demo=command == "demo")
         return {"project": str(store.root), "demo": command == "demo"}
+    if command == "history":
+        return {"snapshots": service.history(Store(service.project_path(args.project, args.projects_dir)), args.target, args.limit)}
     store = select(args)
+    if command == "dismiss":
+        return service.dismiss_script_note(store, args.note_id, args.reason)
+    if command == "adopt":
+        return service.adopt_prompt(store, args.unit_id)
+    if command == "asset":
+        return service.edit_asset(store, args.placeholder, description=args.description, identity_notes=args.identity_notes, image_prompt=args.image_prompt)
     if command == "import":
         stdin_count = sum(str(p) == "-" for p in (args.episode, args.bible, args.ledger_in, args.assets) if p is not None)
         if stdin_count > 1:

@@ -102,6 +102,29 @@ def art_direction(parts):
     return children
 
 
+PLAIN_ERRORS = [
+    (r"^Unmapped placeholders: (.*)", "Prompt 里用了没有映射的占位符：{0}"),
+    (r"^Mapped placeholders never used in the prompt text.*?: (.*)", "这些参考在正文里一次都没用到：{0}（每个参考都要在镜头、声音或色彩说明里点名）"),
+    (r"^Pipeline jargon: (.*)", "Prompt 里出现了流程内部术语：{0}"),
+    (r"^Reference limit: (\w+) (\d+) > (\d+).*", "单段 {0} 参考 {1} 个，超过模型上限 {2}，需要拆段、改取景或说明去掉哪个参考"),
+    (r"^(\S+): missing cast coverage (.*)", "{0}：场景出场表里的 {1} 没有交代（画内、画外或离场原因三选一）"),
+    (r"^(\S+): unit length outside model maximum", "{0}：单元时长超过模型上限"),
+    (r"^(\S+): shot lengths do not sum to unit length", "{0}：各镜头秒数之和不等于单元时长"),
+    (r"^(\S+): present cast missing from assets", "{0}：在场人物缺少对应资产"),
+    (r"^(\S+): location missing from assets", "{0}：缺少场景资产"),
+    (r"^Asset description not approved: (.*)", "资产描述还没批准：{0}"),
+    (r"^Output must contain each requested unit exactly once", "模型没有为每个要求的单元各写一份 Prompt"),
+]
+
+
+def plain_error(error):
+    for pattern, template in PLAIN_ERRORS:
+        match = re.match(pattern, str(error))
+        if match:
+            return template.format(*match.groups())
+    return error
+
+
 def review_issues(review):
     errors = review.get("errors") or []
     findings = review.get("findings") or []
@@ -121,12 +144,12 @@ def review_issues(review):
     return el("section", {"class": "review-summary", "aria-label": "审查问题摘要"},
         el("h3", {}, f"必须修复 · {len(errors) + len(required)} 项") if errors or required else None,
         el("p", {"class": "muted"}, "这些问题会自动带入重试，备注只需补充你的偏好。修订须遵守原文与已定方案，审查建议不能作为新增剧情的依据。"),
-        el("ol", {"class": "review-list"}, [el("li", {"class": "review-item"}, el("p", {}, error)) for error in errors],
+        el("ol", {"class": "review-list"}, [el("li", {"class": "review-item"}, el("p", {}, plain_error(error))) for error in errors],
             [issue(finding) for finding in required]) if errors or required else None,
         detail(f"其他建议 · {len(suggestions)} 项（不阻止通过）", el("ol", {"class": "review-list"}, [issue(finding) for finding in suggestions])) if suggestions else None)
 
 
-def asset_groups(assets, *, expanded=False):
+def asset_groups(assets, *, expanded=False, ctx=None):
     labels = {"character": "人物", "location": "场景", "prop": "道具", "ui": "界面与文字", "layout": "色卡与布局", "voice": "声音", "music": "音乐"}
     statuses = {"needed": "待描述", "described": "已描述", "approved": "已批准"}
     groups = []
@@ -140,7 +163,11 @@ def asset_groups(assets, *, expanded=False):
             el("p", {"class": "muted"}, "变体：" + a["what_changed"]) if a["parent"] else None,
             el("details", {"open": expanded and kind == "character"},
                el("summary", {}, "查看声音描述" if kind == "voice" else "查看音乐描述" if kind == "music" else "查看生成提示词"),
-               copy_prompt(a["image_prompt"], "asset-prompt-" + a["id"], "复制资产 Prompt") if a["image_prompt"] else pre("描述尚未完成。"))) for a in rows]
+               copy_prompt(a["image_prompt"], "asset-prompt-" + a["id"], "复制资产 Prompt") if a["image_prompt"] else pre("描述尚未完成。")),
+            detail("修改这个资产", form(ctx, "edit_asset", field("描述", area("description", "", a["description"])),
+                field("身份要点（出现在每段 Prompt 的参考行，一句话）", input_("identity_notes", "", a.get("identity_notes") or "")),
+                field("生成 Prompt", area("image_prompt", "", a["image_prompt"])), button("保存修改", secondary=True), placeholder=a["placeholder"]))
+                if ctx else None) for a in rows]
         groups.append(el("div", {"class": "asset-group"}, el("h3", {}, f"{label} · {len(rows)}"), el("div", {"class": "asset-grid"}, cards)))
     return groups
 
@@ -289,9 +316,11 @@ def episode(ctx, store, state):
     result = ([progress] if progress else []) + [panel(el("div", {"class": "row"}, el("h2", {}, "分集工作台"), picker,
         el("a", {"class": "primary", "href": "/api/delivery?" + urlencode({"project": ctx["project"], "episode": ctx["episode"]})}, "下载交付包") if data["delivery_ready"] else el("span", {"class": "muted"}, "交付未完成或需要更新")),
         pre("\n".join(data["beat_sheet"])) if data["beat_sheet"] else None)]
-    notes = [f"{'待应用' if n['status'] == 'pending' else '已应用'}{'（场景审查）' if n.get('by') == 'model' else ''}：{n['note']}" for n in data["script_notes"]]
+    labels = {"pending": "待应用", "applied": "已应用", "dismissed": "已驳回"}
+    notes = [f"{labels.get(n['status'], n['status'])}{'（场景审查）' if n.get('by') == 'model' else ''}：{n['note']}" for n in data["script_notes"]]
+    dismiss = [form(ctx, "dismiss_note", button("驳回这条意见：" + n["note"][:24], secondary=True), note_id=n["id"]) for n in data["script_notes"] if n["status"] == "pending"]
     result.append(panel(detail("剧本与剧情修改", pre(data["script"]), pre("\n".join(notes)) if notes else None,
-        form(ctx, "note", field("剧本备注", area("note", "这集有哪些剧情需要调整？")), button("记录剧本修改要求"), target=ctx["episode"]))))
+        dismiss, form(ctx, "note", field("剧本备注", area("note", "这集有哪些剧情需要调整？")), button("记录剧本修改要求"), target=ctx["episode"]))))
     if sample:
         result.append(panel(el("span", {"class": "badge"}, "完整演示预览"),
             el("p", {}, "以下完整视频 Prompt 来自固定样例，方便在视觉确认前查看最终格式。当前项目的视觉确认和正式交付进度仍按实际操作记录。"),
@@ -300,7 +329,7 @@ def episode(ctx, store, state):
     if parts:
         result.append(panel(art_direction(parts)))
     result.append(panel(el("h2", {}, "本集资产与生成 Prompt"),
-        asset_groups(data["episode_assets"] or (sample["assets"] if sample else [])) or el("p", {"class": "muted"}, "资产提取完成后，这里会显示本集的人物、场景和道具。")))
+        asset_groups(data["episode_assets"] or (sample["assets"] if sample else []), ctx=None if sample and not data["episode_assets"] else ctx) or el("p", {"class": "muted"}, "资产提取完成后，这里会显示本集的人物、场景和道具。")))
     result.append(el("section", {"class": "panel", "id": "final-prompts"}, el("h2", {}, "完整视频 Prompt"),
         el("p", {"class": "muted"}, "固定样例 · 3段 · 30秒。可展开参考映射并复制每段完整 Prompt。" if sample else "每段包含总时长、风格、表演、空间、参考职责及逐镜头动作与声音。")))
     if sample:
@@ -320,6 +349,8 @@ def episode(ctx, store, state):
                 button("添加参考", secondary=True, disabled=not available)), unit=uid, operation="add"))
         result.append(panel(el("div", {"class": "row"}, el("h2", {}, unit["label"]), el("span", {"class": "badge warning" if unit["stale"] else "badge"}, "待更新" if unit["stale"] else f"{unit['seconds']} 秒 · 16:9")), references,
             pre(unit["prompt"] or "提示词尚未完成。", id="prompt-" + uid), button("复制提示词", secondary=True, type="button", **{"data-copy": "prompt-" + uid, "disabled": not unit["prompt"]}),
+            detail("直接编辑这一段 Prompt", form(ctx, "edit_prompt", field("Prompt 全文（保存前会做硬检查：占位符必须在映射里且都被正文用到）", area("text", "", unit["prompt"])),
+                button("保存我的修改", secondary=True), unit=uid)) if unit["prompt"] else None,
             detail("生成后的反馈与连续性", form(ctx, "feedback", field("反馈原因", input_("note", "可选：记录原因")),
                 field("累计生成次数（可选）", input_("generations", "选填", type="number", min=1, step=1, **{"data-number": True})),
                 field("累计人工用时（分钟，可选）", input_("user_minutes", "选填", type="number", min=0, step="any", **{"data-number": True})),

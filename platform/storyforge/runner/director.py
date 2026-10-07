@@ -108,6 +108,11 @@ class Director:
                 prefix = rules()["asset_id_prefixes"][asset["type"]]
                 asset_id = prefix + ":" + asset["name"] + ("@" + asset["variant"] if asset["variant"] else "")
                 old = result.get(asset_id, {})
+                if old and (old.get("type"), old.get("name"), old.get("parent") or "", old.get("placeholder")) == (asset["type"], asset["name"], asset["parent"], asset["placeholder"]):
+                    # A finished asset is never silently rewritten by a later extraction; change it with `sfl asset`.
+                    if not old.get("identity_notes") and asset["identity_notes"]:
+                        old["identity_notes"] = asset["identity_notes"]
+                    continue
                 row = {"id": asset_id, **{k: asset[k] for k in ("type", "name", "parent", "what_changed", "placeholder", "description", "identity_notes")},
                        "image_prompt": "", "status": "needed"}
                 # identity_notes only shortens the prompt's reference line; it never invalidates a finished brief.
@@ -402,6 +407,10 @@ class Director:
                     if unit["scene"] == scene.id and (only is None or unit["id"] in only) and self.revision("B7", unit["id"]):
                         fragment = self.store.json(f".state/fragments/{unit['id']}.json")
                         previous = {k: v for k, v in fragment.items() if k != "responses"} if fragment else None
+                        adopted = self.store.json(f".state/adopted/{unit['id']}.json") or {}
+                        current_text = self.store.text(f"prompts/{self.episode}/{unit['id'].split('_')[1]}.md", "")
+                        if adopted.get("fingerprint") == digest(current_text):
+                            previous = {"prompt_text": current_text}  # the user's own wording, not the model's fragments
                         self.unit_prompts(stage, only=[unit["id"]], repairs=self.revision_repairs(self.revision("B7", unit["id"]), previous), scene_id=scene.id)
                         self.finish_revision("B7", unit["id"])
             units = [u for u in board["units"] if u["scene"] == scene.id and (only is None or u["id"] in only)
@@ -518,14 +527,21 @@ class Director:
                         findings = blind["findings"] + compared["findings"]
                         self.store.write(f"findings/reconstruction/{uid}_{digest(findings)[:12]}.json", {"blind": blind, "compare": compared}, json_data=True)
                     actionable = [f for f in findings if f["severity"] in ("blocker", "major")]
-                    if not errors and not actionable:
-                        result = {"passed": True, "prompt_fingerprint": digest(text), "findings": findings,
+                    # The user's own wording is final: reviewer findings stay in the record as notes, never trigger a rewrite.
+                    adopted = (self.store.json(f".state/adopted/{uid}.json") or {}).get("fingerprint") == digest(text)
+                    rejected_ids = {r["finding_id"] for r in self.store.json(f".state/fragments/{uid}.json", {}).get("responses", []) if r["disposition"] == "reject"}
+                    held = bool({f["id"] for f in actionable if f["severity"] == "blocker"} & rejected_ids)
+                    # With open_major=accept, majors that survive the fix rounds travel with the delivery as review notes instead of a card.
+                    keep_open = (self.config.get("fix_policy", {}).get("open_major", "card") == "accept" and attempt == self.config["fix_rounds"]
+                                 and not held and not any(f["severity"] == "blocker" for f in actionable))
+                    if not errors and (adopted or not actionable or keep_open):
+                        result = {"passed": True, "prompt_fingerprint": digest(text), "findings": findings, "adopted": adopted,
+                                  "open_findings": actionable if (adopted or keep_open) else [],
                                   "warnings": prompt_warnings, "description": blind["description"]}
                         if not self.store.accept(job, stage, uid, bindings, {review_path: serialize(result) + "\n"}, metadata={"reviewed": True}):
                             raise StageBlocked("Inputs changed during reconstruction")
                         break
                     self.store.end_job(job, "superseded", "Prompt needs repair")
-                    held = bool({f["id"] for f in actionable if f["severity"] == "blocker"} & {r["finding_id"] for r in self.store.json(f".state/fragments/{uid}.json", {}).get("responses", []) if r["disposition"] == "reject"})
                     if attempt == self.config["fix_rounds"] or held:
                         card = self.runner.cards.create(kind="stuck", stage=stage, target=uid,
                             question=f"{uid} 提示词审查仍有问题", options=[{"key": "retry", "label": "备注后重试"}, {"key": "stop", "label": "停止此项"}],

@@ -111,6 +111,14 @@ def episode(value, number, bible):
     return errors
 
 
+def script_seconds(script_text, config) -> float:
+    """Planning estimate from the script: dialogue at the speech rate plus a fixed allowance per action or sound line."""
+    parsed = parse_script(script_text)
+    dialogue = sum(len(l["line"]) for s in parsed.scenes for l in s.lines if "who" in l)
+    other = sum(1 for s in parsed.scenes for l in s.lines if "who" not in l)
+    return round(dialogue / config["speech_rate_chars_per_sec"] + other * config.get("action_seconds", 1.5))
+
+
 def warnings(seconds, config, target, *, script="", passages=None):
     result = []
     lower, upper = (config["episode_minutes"][k] * 60 for k in ("min", "max"))
@@ -124,5 +132,7 @@ def warnings(seconds, config, target, *, script="", passages=None):
         matched = sum(block.size for block in SequenceMatcher(None, dialogue, source, autojunk=False).get_matching_blocks())
         overlap = matched / len(dialogue) if dialogue else 0
         if overlap >= config["warnings"]["source_overlap"]:
-            result.append({"target":target,"kind":"source_overlap","message":f"Dialogue/source overlap {overlap:.1%}; a differentiation signal, not an originality verdict"})
+            high = overlap >= config["warnings"].get("source_overlap_high", 0.4)
+            result.append({"target":target,"kind":"source_overlap","level":"high" if high else "notice","message":f"Dialogue/source overlap {overlap:.1%}"+
+                ("，高重合：多数台词照搬了原文" if high else "")+"; a differentiation signal, not an originality verdict"})
     return result

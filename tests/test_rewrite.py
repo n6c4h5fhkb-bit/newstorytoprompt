@@ -112,6 +112,151 @@ class DeliveryWordingTests(unittest.TestCase):
             self.assertTrue(any(w["kind"] == "speech_fit" for ws in compare for w in ws), "the compare call keeps storyboard-based warnings")
 
 
+class OpenReviewNotesTests(unittest.TestCase):
+    FINDING = {"severity": "major", "kind": "error", "location": "ep01_u02 镜头1", "evidence": "只作镜框外右侧柜台后人物的身份参考",
+               "problem": "画外参考可能被画进镜框", "suggested_fix": "再强调一次镜框外"}
+
+    def run_policy(self, policy):
+        store = project(Path(self.folder) / "story")
+        with open(store.path("project.yaml"), "a", encoding="utf-8") as stream:
+            stream.write("fix_policy: {open_major: %s}\n" % policy)
+        runner, model = scripted_runner(store, {"reviewer": "reconstruction_blind", "review_target": "ep01_u02", "finding": self.FINDING})
+        approve_look(runner)
+        return store, runner, runner.run()
+
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory(prefix="sfl-notes-")
+        self.addCleanup(temporary.cleanup)
+        self.folder = temporary.name
+
+    def test_default_policy_still_stops_for_a_decision(self):
+        store, runner, report = self.run_policy("card")
+        self.assertTrue(report["waiting"])
+        self.assertTrue(any(c["stage"] == "B8" and c["kind"] == "stuck" for c in runner.cards.list()))
+
+    def test_accept_policy_delivers_with_the_open_major_as_a_review_note(self):
+        store, runner, report = self.run_policy("accept")
+        self.assertFalse(report["waiting"], report)
+        self.assertFalse([c for c in runner.cards.list() if c["kind"] == "stuck"])
+        unit = store.text("delivery/ep01/u02.md")
+        self.assertIn("## 审查提示", unit)
+        self.assertIn("画外参考可能被画进镜框", unit)
+        manifest = store.json("delivery/ep01/manifest.json")
+        notes = next(u for u in manifest["units"] if u["id"] == "ep01_u02")["open_review_notes"]
+        self.assertEqual([n["problem"] for n in notes], ["画外参考可能被画进镜框"])
+        self.assertNotIn("## 审查提示", store.text("delivery/ep01/u01.md"))
+
+
+class AdoptAndEditTests(unittest.TestCase):
+    def test_an_adopted_prompt_keeps_the_users_wording_even_when_a_reviewer_objects(self):
+        finding = {"severity": "major", "kind": "error", "location": "ep01_u02", "evidence": "用户加的ADOPTMARK",
+                   "problem": "多出一句", "suggested_fix": "删掉"}
+        case = {"reviewer": "reconstruction_blind", "review_target": "ep01_u02", "finding": finding}
+        with tempfile.TemporaryDirectory(prefix="sfl-adopt-") as folder:
+            store = project(Path(folder) / "story")
+            runner, model = scripted_runner(store, case)
+            approve_look(runner)
+            self.assertFalse(runner.run()["waiting"])
+            path = "prompts/ep01/u02.md"
+            original = store.text(path)
+            store.write(path, original.rstrip("\n") + "用户加的ADOPTMARK\n")
+            self.assertFalse(service.status(store)["progress"]["ep01"]["delivery"])
+            service.adopt_prompt(store, "ep01_u02")
+            before = len(prompt_calls(model))
+            self.assertFalse(runner.run()["waiting"])
+            self.assertEqual(len(prompt_calls(model)), before, "an adopted prompt is not rewritten")
+            self.assertIn("用户加的ADOPTMARK", store.text("delivery/ep01/u02.md"))
+            review = store.json(".state/reviews/ep01_u02.json")
+            self.assertTrue(review["adopted"] and review["findings"])
+            self.assertTrue(service.status(store)["progress"]["ep01"]["delivery"])
+
+    def test_adoption_runs_the_hard_checks_first(self):
+        with tempfile.TemporaryDirectory(prefix="sfl-adopt-") as folder:
+            store, runner, model = delivered(folder)
+            path = "prompts/ep01/u02.md"
+            original = store.text(path)
+            with self.assertRaisesRegex(SflError, "nothing to adopt"):
+                service.adopt_prompt(store, "ep01_u02")
+            with self.assertRaisesRegex(SflError, "hard checks.*Unmapped"):
+                service.adopt_prompt(store, "ep01_u02", original + "@未映射_图\n")
+            self.assertEqual(store.text(path), original)
+            with self.assertRaisesRegex(SflError, "hard checks.*空间锚"):
+                service.adopt_prompt(store, "ep01_u02", original + "空间锚\n")
+            service.adopt_prompt(store, "ep01_u02", original.rstrip("\n") + "。慢一点。\n")
+            self.assertIn("慢一点", store.text(path))
+
+    def test_editing_an_asset_marks_only_its_prompts_stale_and_keeps_a_matching_brief(self):
+        with tempfile.TemporaryDirectory(prefix="sfl-asset-") as folder:
+            store, runner, model = delivered(folder)
+            service.edit_asset(store, "@云清禾_母图", identity_notes="成年女子，青绿眼睛，灰白破裙")
+            stale = {p for p in store.stale_artifacts() if p.startswith("prompts/")}
+            self.assertTrue(stale)
+            briefs = lambda: sum(1 for role, *_ in model.packets if role == "asset_prompt")
+            before = briefs()
+            self.assertFalse(runner.run(allow_stale=["ep01"])["waiting"])
+            self.assertEqual(briefs(), before)
+            self.assertIn("成年女子，青绿眼睛，灰白破裙", store.text("prompts/ep01/u01.md"))
+            # A new description with its own image prompt is adopted together; no brief is regenerated.
+            service.edit_asset(store, "@道具_腕镣", description="一副暗哑黑铁腕镣，短链相连，扣环内侧磨亮", image_prompt="腕镣四宫格：正视、侧视、俯视、扣环近照")
+            self.assertFalse(runner.run(allow_stale=["ep01"])["waiting"])
+            self.assertEqual(briefs(), before)
+            row = next(a for a in store.assets() if a["placeholder"] == "@道具_腕镣")
+            self.assertEqual(row["image_prompt"], "腕镣四宫格：正视、侧视、俯视、扣环近照")
+            self.assertIn("扣环内侧磨亮", store.text("delivery/ep01/assets.md"))
+            for bad in ({}, {"description": ""}):
+                with self.assertRaises(SflError):
+                    service.edit_asset(store, "@道具_腕镣", **bad)
+            with self.assertRaisesRegex(SflError, "Unknown asset"):
+                service.edit_asset(store, "@不存在", description="x")
+
+
+class PlainErrorTests(unittest.TestCase):
+    def test_common_hard_errors_are_shown_in_plain_chinese(self):
+        from storyforge.ui.render import plain_error
+        self.assertIn("没有映射", plain_error("Unmapped placeholders: @甲_图"))
+        self.assertIn("一次都没用到", plain_error("Mapped placeholders never used in the prompt text (use each): @乙_图"))
+        self.assertIn("超过模型上限 9", plain_error("Reference limit: images 10 > 9; storyboarder must decide"))
+        self.assertEqual(plain_error("something unrecognised"), "something unrecognised")
+
+
+class DismissNoteTests(unittest.TestCase):
+    def test_a_dismissed_script_note_is_no_longer_pending_or_shown_to_the_writer(self):
+        with tempfile.TemporaryDirectory(prefix="sfl-dismiss-") as folder:
+            store, runner, model = delivered(folder)
+            record = service.note(store, "ep01", "把结尾改成别的")
+            note_id = store.json("notes/script_notes.json")[0]["id"]
+            self.assertEqual(record["kind"], "script")
+            from storyforge.store import select_text
+            text = store.text("notes/script_notes.json")
+            self.assertEqual(len(select_text(text, {"kind": "script_notes", "episode": "ep01"})), 1)
+            service.dismiss_script_note(store, note_id, "审查误判")
+            self.assertEqual(store.json("notes/script_notes.json")[0]["status"], "dismissed")
+            self.assertEqual(select_text(store.text("notes/script_notes.json"), {"kind": "script_notes", "episode": "ep01"}), [])
+            with self.assertRaisesRegex(SflError, "Only a pending"):
+                service.dismiss_script_note(store, note_id)
+            with self.assertRaisesRegex(SflError, "Unknown script note"):
+                service.dismiss_script_note(store, "n_missing")
+            # The episode is not waiting for a note that no longer exists, and nothing finished became stale.
+            self.assertFalse([p for p in store.stale_artifacts() if p.startswith(("episodes/", "storyboard/", "prompts/", "delivery/"))])
+            self.assertFalse(runner.run()["waiting"])
+
+
+class HistoryTests(unittest.TestCase):
+    def test_history_lists_snapshots_that_revert_accepts(self):
+        with tempfile.TemporaryDirectory(prefix="sfl-history-") as folder:
+            store = create_project(Path(folder) / "p", {"name": "p", "output": {"model_card": "seedance-2.0", "ratio": "16:9", "music": "none"}})
+            store.write("episodes/ep01.md", "# EP01\n旧\n")
+            store.snapshot("old")
+            store.write("episodes/ep01.md", "# EP01\n新\n")
+            store.snapshot("new")
+            rows = service.history(store, "ep01")
+            self.assertEqual([r["message"] for r in rows], ["new", "old"])
+            self.assertTrue(all(r["snapshot"] and r["time"] for r in rows))
+            store.revert("ep01", rows[1]["snapshot"])
+            self.assertEqual(store.text("episodes/ep01.md"), "# EP01\n旧\n")
+            self.assertGreaterEqual(len(service.history(store)), 3)
+
+
 class EpisodeRevertTests(unittest.TestCase):
     def test_reverting_an_episode_restores_its_ending_ledger(self):
         with tempfile.TemporaryDirectory(prefix="sfl-revert-") as folder:

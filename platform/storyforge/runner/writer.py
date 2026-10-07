@@ -337,7 +337,8 @@ class Screenwriter:
             script = parse_script(value["script"])
             used = sorted({n for scene in script.scenes for n in scene.cast} | {l["who"] for scene in script.scenes for l in scene.lines if "who" in l})
             visible = bible_slice(candidate_bible,used,sorted({s.location for s in script.scenes}))
-            warn = check.warnings(value["estimated_seconds"],self.config,episode,script=value["script"],passages=sources["source_passages"].data)
+            # The model's own estimate ran about twice too long on a real episode; judge length from the script itself.
+            warn = check.warnings(check.script_seconds(value["script"],self.config),self.config,episode,script=value["script"],passages=sources["source_passages"].data)
             review_sources = {**sources,"script":Source(value["script"],[]),"bible":Source(visible,sources["bible"].bindings),"warnings":Source(warn,[])}
             roles = self.runner.stages[stage].get("reviewers",[])
             def review_role(role):
@@ -348,7 +349,9 @@ class Screenwriter:
             results = dict(run(roles,review_role,self.config["concurrency"]["llm"]))
             # Keep stage-defined finding order despite different completion times.
             findings = [finding for role in roles for finding in results[role]["findings"]]
-            review_record.clear(); review_record.update(passed=not any(f["severity"] in ("blocker","major") for f in findings),
+            accept_open = self.runner.config.get("fix_policy",{}).get("open_major","card")=="accept"
+            review_record.clear(); review_record.update(passed=not any(f["severity"] in (("blocker",) if accept_open else ("blocker","major")) for f in findings),
+                open_findings=[f for f in findings if f["severity"]=="major"],
                 script_fingerprint=digest(value["script"]),reviewers=results,warnings=warn,hook_type=value["hook_type"],format_repairs=list(format_repairs))
             return findings
         def output(value,store):

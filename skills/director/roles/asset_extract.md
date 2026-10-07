@@ -4,9 +4,11 @@
 
 任务：提取 character、location、prop、ui、voice、music、layout；包含无台词但在场的角色、系统和旁白的音色。包括 @色卡。资产可复用时使用已存在的名称和 placeholder。variant 空值为母资产；子资产的 parent 是母资产 ID，what_changed 只写真正改变的状态。
 
-输出：assets schema；代码分配 ID。placeholder 为 @名称_版本，声音 @名称_声音，色卡 @色卡。parent 引用既有或本次提出的母资产 ID（char:名称、loc:名称、prop:名称、ui:名称、voice:名称、music:名称、layout:名称）。
+输出：assets schema；代码分配 ID。placeholder 命名固定：人物和场景母资产 @名称_母图（如 @云清禾_母图、@妖商店_母图），人物和场景的子资产 @名称_变体（如 @云清禾_受伤、@妖商店_夜景），道具 @道具_名称（如 @道具_腕镣），界面 @界面_名称，声音 @名称_声音，色卡 @色卡；名称里不再含下划线。parent 引用既有或本次提出的母资产 ID（char:名称、loc:名称、prop:名称、ui:名称、voice:名称、music:名称、layout:名称）。
 
 assets 列出本集需要的新和已有资产；已有条目原样复用，避免重复制作。不把其他集独有、当前剧本不用的资产混入本集。
+
+声音和配乐的 description 只写音色或情绪特征（性别、年龄、音质、说话方式），不写台词内容、咳嗽等具体声音事件或剧情，防止参考说明被误读成要念的台词。
 
 identity_notes：提示词参考清单里这件资产的一句话身份要点（40 字内），写画面里一眼认出它的锚点：人物写大致年龄、身高、发型发色、眼睛、主服装；场景写布局要点；道具写外形与材质。是 description 的浓缩，不新增设定；声音、色卡、界面可留空，代码会回退用 description。
 

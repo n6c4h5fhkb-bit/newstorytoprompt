@@ -3,6 +3,7 @@ from string import Template
 import re
 
 from storyforge import ROOT
+from storyforge.checks import rules
 from storyforge.config import load_yaml
 
 
@@ -34,7 +35,7 @@ def unit_label(unit: dict, units: list[dict]) -> str:
 def render(fragments: dict, references: list[dict], style_lock: str, config: dict, unit: dict, *, label: str) -> str:
     parts = load_yaml(ROOT / "skills/director/taste/prompt_parts.yaml")
     lines = [Template(parts["reference_line"]).substitute(
-        placeholder=r["placeholder"], name=r["name"], role=parts["roles"]["previous_frame" if r["asset_id"] == "external:previous_frame" else r["type"]], description=r.get("identity_notes") or r["description"], position=r["position"])
+        placeholder=r["placeholder"], name=r["name"], role=parts["roles"]["previous_frame" if r["asset_id"] == "external:previous_frame" else "palette" if r["placeholder"] == rules()["palette_placeholder"] else r["type"]], description=r.get("identity_notes") or r["description"], position=r["position"])
         for r in references]
     audio = parts["audio_none"] if config["output"]["music"] == "none" else Template(parts["audio_cue"]).substitute(music=config["output"]["music_placeholder"])
     return Template(parts["prompt"]).substitute(label=label, seconds=f"{unit['seconds']:g}", manifest="\n".join(lines), style_lock=style_lock,

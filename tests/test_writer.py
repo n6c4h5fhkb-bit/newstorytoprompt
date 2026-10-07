@@ -51,6 +51,18 @@ class WriterTests(unittest.TestCase):
             with self.subTest(field=field,value=value),self.assertRaises(SflError):require(clean,schema_for("adaptation_plan"))
         self.assertIn("改编：原文私下交易", plan_text(plan(1)))
 
+    def test_copied_dialogue_is_flagged_high_but_rewritten_dialogue_is_not(self):
+        from tests.support import FIXTURE
+        from storyforge.checks.parsers import parse_script
+        from storyforge.config import configuration
+        script = (FIXTURE / "ep01.md").read_text(encoding="utf-8")
+        copied = "".join(l["line"] for s in parse_script(script).scenes for l in s.lines if "who" in l)
+        config = configuration()
+        found = check.warnings(210, config, "ep01", script=script, passages=[{"text": copied}])
+        self.assertEqual([w["level"] for w in found if w["kind"] == "source_overlap"], ["high"])
+        self.assertIn("高重合", found[0]["message"])
+        self.assertFalse([w for w in check.warnings(210, config, "ep01", script=script, passages=[{"text": "与剧本毫无关系的一段叙述文字。"}]) if w["kind"] == "source_overlap"])
+
     def test_plan_rejects_unparseable_bible_and_unregistered_plan_names(self):
         index = split(self.store.text("source/novel.txt"))
         for mutation in ("prose", "prose_under_heading", "missing_voice", "unknown_character", "unknown_location"):
