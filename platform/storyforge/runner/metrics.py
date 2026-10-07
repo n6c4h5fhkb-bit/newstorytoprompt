@@ -87,3 +87,36 @@ def production_metrics(store):
         "user_minutes_per_finished_episode":sum(finished_minutes)/len(finished) if finished and len(finished_minutes)==len(finished) else None,
         "first_finished_at":finished_at,"days_to_first_finished_episode":finish_days if finish_days is not None and finish_days>=0 else None,
         "reported_unit_details":values}
+
+
+def review_signal(store, *, minimum_units: int = 5):
+    """Does an open text-review note predict a redo? The kill rule needs this before B8 stays a gate."""
+    flagged = {}
+    for path in store.path("delivery").glob("ep*/manifest.json"):
+        manifest = store.json(path.relative_to(store.root).as_posix())
+        if manifest.get("demo") is False:
+            for unit in manifest["units"]:
+                flagged[unit["id"]] = bool(unit.get("open_review_notes"))
+    first = {}
+    for row in store.logs("feedback"):
+        if not row.get("demo") and row.get("result") in ("ok", "redo"):
+            first.setdefault(row["unit"], row)
+    groups = {"with_open_notes": {"units": 0, "redo": 0}, "without_open_notes": {"units": 0, "redo": 0}}
+    for unit, row in first.items():
+        if unit in flagged:
+            group = groups["with_open_notes" if flagged[unit] else "without_open_notes"]
+            group["units"] += 1
+            group["redo"] += row["result"] == "redo"
+    reasons = {}
+    for row in first.values():
+        for reason in row.get("reasons") or []:
+            reasons[reason] = reasons.get(reason, 0) + 1
+    rate = lambda g: g["redo"] / g["units"] if g["units"] else None
+    with_notes, without = rate(groups["with_open_notes"]), rate(groups["without_open_notes"])
+    if min(groups["with_open_notes"]["units"], groups["without_open_notes"]["units"]) < minimum_units:
+        verdict = "not_enough_data"
+    elif with_notes - without < 0.1:
+        verdict = "reviews_do_not_predict_redo"
+    else:
+        verdict = "reviews_predict_redo"
+    return {"groups": groups, "redo_rate_with_open_notes": with_notes, "redo_rate_without": without, "redo_reasons": reasons, "verdict": verdict}

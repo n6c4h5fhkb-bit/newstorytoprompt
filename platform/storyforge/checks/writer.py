@@ -98,6 +98,49 @@ def plan(value, timeline, index):
     return errors
 
 
+def rhythm_errors(beats: list[dict], script, rules: dict) -> list[str]:
+    """Mechanical shape of the beat sheet: a rising ladder of pressure, a burst, then payoff and a closing hook."""
+    errors = []
+    scenes = {s.id for s in script.scenes}
+    if len(beats) < rules["min_beats"]:
+        errors.append(f"Beat sheet has {len(beats)} beats; at least {rules['min_beats']} are needed to show the cadence")
+    for beat in beats:
+        if beat["scene"] not in scenes:
+            errors.append(f"Beat refers to unknown scene {beat['scene']}")
+    times = [b["at_seconds"] for b in beats]
+    if times != sorted(times):
+        errors.append("Beat times must not go backwards")
+    if not beats:
+        return errors
+    if beats[-1]["kind"] != "hook":
+        errors.append("The last beat must be the closing hook")
+    bursts = [i for i, b in enumerate(beats) if b["kind"] == "burst"]
+    if not bursts:
+        errors.append("The episode needs a burst beat: one public, irreversible act that flips the balance of power")
+    else:
+        top = max(bursts, key=lambda i: (beats[i]["intensity"], -i))
+        pressure = [b for b in beats[:top] if b["kind"] in ("press", "counter")]
+        if len(pressure) < rules["min_pressure_before_burst"]:
+            errors.append(f"Only {len(pressure)} pressure beats before the main burst; build at least {rules['min_pressure_before_burst']}, each heavier than the last")
+        elif max(b["intensity"] for b in pressure) <= min(b["intensity"] for b in pressure):
+            errors.append("The pressure beats before the burst must rise in intensity")
+        if beats[top]["intensity"] < max((b["intensity"] for b in pressure), default=0):
+            errors.append("The main burst must be at least as intense as the pressure that precedes it")
+        if top >= len(beats) - 2:
+            errors.append("Show the payoff or consequence after the burst before the hook")
+    return errors
+
+
+def rhythm_warnings(beats: list[dict], rules: dict, target: str) -> list[dict]:
+    result = []
+    if beats and (beats[0]["at_seconds"] > rules["first_conflict_by_seconds"] or beats[0]["kind"] not in ("press", "counter", "burst")):
+        result.append({"target": target, "kind": "rhythm", "message": f"The first conflict beat should land within {rules['first_conflict_by_seconds']}s"})
+    for before, after in zip(beats, beats[1:]):
+        if after["at_seconds"] - before["at_seconds"] > rules["max_gap_seconds"]:
+            result.append({"target": target, "kind": "rhythm", "message": f"{after['at_seconds'] - before['at_seconds']:g}s between beats at {before['at_seconds']:g}s and {after['at_seconds']:g}s; keep an emotional move every {rules['max_gap_seconds']}s"})
+    return result
+
+
 def episode(value, number, bible):
     try:
         script = parse_script(value["script"])
@@ -108,6 +151,8 @@ def episode(value, number, bible):
         errors.append("Episode number must match the requested episode")
     if not value["ledger_out"].strip():
         errors.append("Ending ledger cannot be empty")
+    from storyforge.checks import rules
+    errors += rhythm_errors(value["beats"], script, rules()["rhythm"])
     return errors
 
 

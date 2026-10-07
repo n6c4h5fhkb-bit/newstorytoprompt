@@ -13,6 +13,14 @@ from storyforge.store import create_project, serialize
 SCRIPT = (FIXTURE / "ep01.md").read_text(encoding="utf-8")
 BIBLE = (FIXTURE / "bible.md").read_text(encoding="utf-8")
 LEDGER = (FIXTURE / "ep00.md").read_text(encoding="utf-8")
+BEATS = [
+    {"scene": "S01", "kind": "press", "intensity": 2, "at_seconds": 5, "summary": "妖商把腕镣钥匙压在柜台上不松手"},
+    {"scene": "S01", "kind": "press", "intensity": 3, "at_seconds": 25, "summary": "妖商开价，云清禾被奴印压得抓桌"},
+    {"scene": "S01", "kind": "burst", "intensity": 5, "at_seconds": 60, "summary": "林恒当众亮出系统提示，逼妖商开锁"},
+    {"scene": "S01", "kind": "payoff", "intensity": 4, "at_seconds": 90, "summary": "腕镣落地，妖商失态"},
+    {"scene": "S01", "kind": "turn", "intensity": 3, "at_seconds": 130, "summary": "云清禾离店，林恒追出"},
+    {"scene": "S01", "kind": "hook", "intensity": 4, "at_seconds": 200, "summary": "忠诚度为何为负？"},
+]
 PARAGRAPH = "妖商手握铜钥匙。林恒要求开锁，云清禾离开妖商店。"
 
 
@@ -31,7 +39,7 @@ def timeline(count=2):
 
 def plan(count=2):
     episodes = [{"number":n,"title":"开锁","beats":[f"b{n:02d}"],"source_refs":[f"ch{n:03d}:p0001"],"estimated_seconds":210,
-        "emotions":["愤怒","期待"],"turn":"云清禾摆脱束缚", "conflict":"林恒当众逼妖商交出钥匙，妖商一步步加价拖延", "changes":["原文私下交易 → 改为当众限时三十秒 → 加入旁观者和时限，压迫更直接"], "end_hook":{"type":"pending_reveal","description":"忠诚度为何为负？"},
+        "emotions":["愤怒","期待"],"turn":"云清禾摆脱束缚", "conflict":"林恒当众逼妖商交出钥匙，妖商一步步加价拖延", "changes":["原文私下交易 → 改为当众限时三十秒 → 加入旁观者和时限，压迫更直接"], "immutable":["妖商手握铜钥匙","云清禾最终离开妖商店"], "end_hook":{"type":"pending_reveal","description":"忠诚度为何为负？"},
         "major_turn":n%3==0,"retention_checkpoint":n%6==0,"characters":["林恒","云清禾","妖商"],"locations":["妖商店"],"entities":[]}
         for n in range(1,count+1)]
     moments = [{"id":f"m{n:02d}","episode":n,"beat_ids":[f"b{n:02d}"],"summary":"开锁后得到自由","source_refs":[f"ch{n:03d}:p0001"],
@@ -68,7 +76,7 @@ class WriterCodex:
             # A local script note deliberately changes a middle line only.
             if data["script_notes"]:
                 script = script.replace("林恒：打开它。", "林恒：把锁打开。")
-            value = {"episode":n,"script":script,"ledger_out":"云清禾、林恒已离店，妖商留在柜台后。\n","hook_type":"pending_reveal","estimated_seconds":210,"bible_additions":[],"responses":[]}
+            value = {"episode":n,"script":script,"ledger_out":"云清禾、林恒已离店，妖商留在柜台后。\n","hook_type":"pending_reveal","estimated_seconds":210,"beats":BEATS,"bible_additions":[],"responses":[]}
         elif role=="viewer":
             value = {"keep_watching":True,"reason":"悬念明确。","findings":[]}
         elif role in ("story_check","plan_reviewer"):

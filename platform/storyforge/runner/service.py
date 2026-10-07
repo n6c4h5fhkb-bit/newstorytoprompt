@@ -1,5 +1,6 @@
 from __future__ import annotations
 from pathlib import Path
+import json
 import re
 import uuid
 import math
@@ -11,8 +12,8 @@ from storyforge.config import SflError, configuration, load_yaml, merge, model_c
 from storyforge.store import Store, create_project, digest, serialize, now, atomic_write
 from storyforge.runner import Runner, StageBlocked, import_episode, bind_adopted_script
 from storyforge.cards import Cards
-from storyforge.runner.metrics import production_metrics
-from storyforge.checks import prompt as check_prompt, references as check_references
+from storyforge.runner.metrics import production_metrics, review_signal
+from storyforge.checks import prompt as check_prompt, references as check_references, rules
 from storyforge.delivery import ready as delivery_ready
 from storyforge.packets import file_source
 from storyforge.delivery.prompts import style_parts, unit_label
@@ -106,10 +107,11 @@ def metrics(store: Store) -> dict:
             result["per_episode"][episode] = call_metrics(episode_calls.get(episode,[]),{u:r for u,r in first.items() if u.startswith(episode+"_")})
         result["per_episode"][episode].update(measurement)
     result.update(measurements)
+    result["review_signal"] = review_signal(store)
     return result
 
 
-def feedback(store: Store, unit: str, result: str, note: str = "", *, generations=None, user_minutes=None):
+def feedback(store: Store, unit: str, result: str, note: str = "", *, generations=None, user_minutes=None, reasons=None):
     if result not in ("ok", "redo") or not re.fullmatch(r"ep\d{2,}_u\d{2,}", unit):
         raise SflError("Use a known unit and result ok or redo")
     episode = unit.split("_")[0]
@@ -117,6 +119,12 @@ def feedback(store: Store, unit: str, result: str, note: str = "", *, generation
     delivered = next((u for u in (manifest or {}).get("units", []) if u["id"] == unit), None)
     if not delivered:
         raise SflError("Unit has not been delivered")
+    reasons = [r for r in (reasons or []) if r]
+    allowed = rules()["redo_reasons"]
+    if reasons and result != "redo":
+        raise SflError("Reasons only apply to a redo")
+    if set(reasons) - set(allowed):
+        raise SflError("Unknown redo reason; use: " + ", ".join(allowed))
     reported = {}
     if generations is not None:
         if type(generations) is not int or generations<1:
@@ -132,7 +140,7 @@ def feedback(store: Store, unit: str, result: str, note: str = "", *, generation
             known = [r[field] for r in previous if r.get(field) is not None]
             if known and value<max(known):
                 raise SflError(f"Cumulative {field} cannot decrease")
-        store.append("feedback", {"unit": unit, "result": result, "note": note, "prompt_fingerprint": delivered["prompt_fingerprint"],
+        store.append("feedback", {"unit": unit, "result": result, "note": note, "reasons": reasons, "prompt_fingerprint": delivered["prompt_fingerprint"],
                                   "demo": bool((manifest or {}).get("demo")),**reported})
 
 
@@ -265,6 +273,37 @@ def edit_asset(store: Store, placeholder: str, *, description=None, identity_not
         store.stale_artifacts()
         store.snapshot(f"edit asset {placeholder}")
     return {"edited": placeholder, "fields": sorted(changed), "needs_run": True}
+
+
+def gold_add(store: Store, unit: str, label: str, note: str = "") -> dict:
+    """Keep a delivered unit as a labelled example, so a later rule change can be checked against what you judged good or bad."""
+    if label not in ("good", "bad") or not re.fullmatch(r"ep\d{2,}_u\d{2,}", unit):
+        raise SflError("Use a unit such as ep01_u02 and label good or bad")
+    episode, short = unit.split("_")
+    prompt = store.text(f"prompts/{episode}/{short}.md", "")
+    mapping = store.json(f"refs/units/{unit}.json")
+    board = store.json(f"storyboard/{episode}.json", {"units": []})
+    entry = next((u for u in board["units"] if u["id"] == unit), None)
+    if not prompt or not mapping or not entry:
+        raise SflError("The unit needs a prompt, a reference mapping and a storyboard entry")
+    store.write(f"gold/{unit}.json", {"unit": unit, "label": label, "note": note, "time": now(), "prompt": prompt, "mapping": mapping, "storyboard_unit": entry}, json_data=True)
+    store.snapshot(f"gold example {unit} {label}")
+    return {"gold": unit, "label": label}
+
+
+def gold_check(store: Store) -> dict:
+    """Re-run the mechanical checks over the labelled examples. A good example that now fails means a rule got stricter than your taste."""
+    card = model_card(configuration(store.root))
+    report = {"examples": 0, "good_now_failing": [], "bad_caught": [], "bad_not_mechanical": []}
+    for path in sorted(store.path("gold").glob("*.json")) if store.path("gold").exists() else []:
+        entry = json.loads(path.read_text(encoding="utf-8"))
+        errors = check_references(entry["mapping"], card) + check_prompt(entry["prompt"], entry["mapping"])
+        report["examples"] += 1
+        if entry["label"] == "good" and errors:
+            report["good_now_failing"].append({"unit": entry["unit"], "errors": errors})
+        elif entry["label"] == "bad":
+            report["bad_caught" if errors else "bad_not_mechanical"].append(entry["unit"])
+    return report
 
 
 def history(store: Store, target: str | None = None, limit: int = 30) -> list[dict]:
@@ -501,7 +540,7 @@ def settings() -> dict:
 
 
 def update_settings(values: dict) -> dict:
-    allowed = {"models", "token_budget", "card", "warnings", "episode_minutes", "speech_rate_chars_per_sec", "concurrency", "output", "fix_rounds", "external_attempts"}
+    allowed = {"models", "token_budget", "card", "warnings", "episode_minutes", "speech_rate_chars_per_sec", "concurrency", "output", "fix_rounds", "hard_retries", "fix_policy", "external_attempts"}
     if set(values) - allowed:
         raise SflError("Unknown setting")
     updated = merge(settings(), values)

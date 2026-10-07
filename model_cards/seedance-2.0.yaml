@@ -3,6 +3,9 @@ max_seconds: 15
 refs: {images: 9, videos: 3, audio: 3}
 multi_shot: true
 timestamp_control: weak
+max_shots_per_unit: 4      # one core action per unit; fast pace comes from cutting between units
+min_shot_seconds: 2.5
+speech_overrun_limit: 1.3  # dialogue chars / speech rate may exceed a shot by this factor before it is an error
 readable_text: unreliable
 native_audio: true
 verification: design-document-defaults-confirm-on-your-account

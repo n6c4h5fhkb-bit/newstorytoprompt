@@ -151,9 +151,14 @@ class CheckTests(unittest.TestCase):
         errors = "\n".join(storyboard(board, script, bible, assets, self.card))
         self.assertNotIn("议价声", errors)
         self.assertNotIn("present cast missing", errors)
-        # An ordinary character with no asset is still caught.
-        unit["offscreen"] = sorted(set(unit["offscreen"]) | {"妖商"})
+        # A person who appears in a shot still needs an asset; one kept off-screen does not.
         unit["assets"] = [a for a in unit["assets"] if a != "char:妖商"]
+        unit["offscreen"] = sorted(set(unit["offscreen"]) | {"妖商"})
+        for shot in unit["shots"]:
+            shot["on_screen"] = [n for n in shot["on_screen"] if n != "妖商"]
+        self.assertNotIn("present cast missing", "\n".join(storyboard(board, script, bible, assets, self.card)))
+        unit["shots"][0]["on_screen"] = sorted(set(unit["shots"][0]["on_screen"]) | {"妖商"})
+        unit["offscreen"] = [n for n in unit["offscreen"] if n != "妖商"]
         self.assertIn("present cast missing", "\n".join(storyboard(board, script, bible, assets, self.card)))
 
     def test_runtime_is_estimated_from_the_script_not_trusted_from_the_model(self):
@@ -166,6 +171,49 @@ class CheckTests(unittest.TestCase):
         self.assertEqual(seconds, round(dialogue / self.config["speech_rate_chars_per_sec"] + other * self.config["action_seconds"]))
         self.assertIn("runtime", {w["kind"] for w in script_warnings(seconds, self.config, "ep01")})
         self.assertFalse([w for w in script_warnings(200, self.config, "ep01") if w["kind"] == "runtime"])
+
+    def test_beat_sheet_must_show_a_rising_ladder_a_burst_a_payoff_and_a_hook(self):
+        from storyforge.checks.writer import rhythm_errors, rhythm_warnings
+        from tests.support_writer import BEATS
+        rules_ = rules()["rhythm"]
+        self.assertFalse(rhythm_errors(deepcopy(BEATS), self.script, rules_))
+        def broken(change):
+            beats = deepcopy(BEATS)
+            change(beats)
+            return "\n".join(rhythm_errors(beats, self.script, rules_))
+        self.assertIn("at least", broken(lambda b: b.__delitem__(slice(3, None))))
+        self.assertIn("closing hook", broken(lambda b: b[-1].update(kind="turn")))
+        self.assertIn("burst beat", broken(lambda b: b[2].update(kind="turn")))
+        self.assertIn("pressure beats", broken(lambda b: b[0].update(kind="turn")))
+        self.assertIn("must rise", broken(lambda b: b[1].update(intensity=2)))
+        self.assertIn("unknown scene", broken(lambda b: b[0].update(scene="S09")))
+        self.assertIn("backwards", broken(lambda b: b[1].update(at_seconds=1)))
+        self.assertIn("payoff or consequence", broken(lambda b: b.__delitem__(slice(3, 5))))
+        slow = deepcopy(BEATS)
+        slow[0]["at_seconds"] = 20
+        slow[1]["at_seconds"] = 80
+        kinds = {w["kind"] for w in rhythm_warnings(slow, rules_, "ep01")}
+        self.assertEqual(kinds, {"rhythm"})
+        self.assertEqual(len(rhythm_warnings(slow, rules_, "ep01")), 4)
+
+    def test_unit_pace_limits_and_speech_fit_are_hard_checks(self):
+        board = deepcopy(RESPONSES["storyboard:ep01"])
+        assets = [{**a, "id": rules()["asset_id_prefixes"][a["type"]] + ":" + a["name"] + ("@" + a["variant"] if a["variant"] else ""),
+                   "status": "approved", "image_prompt": "测试描述"} for a in RESPONSES["asset_extract:ep01"]["assets"]]
+        rate = self.config["speech_rate_chars_per_sec"]
+        self.assertFalse(storyboard(board, self.script, self.bible, assets, self.card, speech_rate=rate))
+        crowded = deepcopy(board)
+        first = crowded["units"][0]
+        shot = first["shots"][0]
+        first["shots"] = [{**deepcopy(shot), "id": f"s{i}", "seconds": first["seconds"] / 5} for i in range(1, 6)]
+        errors = "\n".join(storyboard(crowded, self.script, self.bible, assets, self.card, speech_rate=rate))
+        self.assertIn("5 shots in one unit", errors)
+        self.assertIn("minimum", errors)
+        fast = deepcopy(board)
+        fast["units"][0]["shots"][0]["dialogue"] = [{"who": "林恒", "kind": "speech", "line": "这是一句太长太长太长太长太长太长太长太长的台词"}]
+        fast["units"][0]["shots"][0]["seconds"] = 3
+        fast["units"][0]["shots"][1]["seconds"] = fast["units"][0]["seconds"] - 3
+        self.assertIn("cannot be spoken", "\n".join(storyboard(fast, self.script, self.bible, assets, self.card, speech_rate=rate)))
 
     def test_placeholder_names_follow_the_convention(self):
         base = {"id":"char:沈砚","type":"character","name":"沈砚","parent":"","what_changed":"","image_prompt":"测试","placeholder":"@沈砚_母图","status":"approved","description":"测试"}

@@ -70,7 +70,8 @@ class ScriptedCodex:
                 patch(value, mutation)
         if packet.role == self.case.get("reviewer") and (not self.case.get("review_target") or target == self.case["review_target"]):
             evidence = self.case["finding"]["evidence"]
-            if any(evidence in text for text in leaf_strings(packet.data)):
+            # previous_findings repeats earlier evidence verbatim; it says nothing about whether the problem is still there.
+            if any(evidence in text for text in leaf_strings({k: v for k, v in packet.data.items() if k != "previous_findings"})):
                 value["findings"] = [deepcopy(self.case["finding"])]
         if packet.role == "unit_prompt":
             requested = {u["id"] for u in packet.data["units"]}

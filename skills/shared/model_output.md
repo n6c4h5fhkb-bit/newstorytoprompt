@@ -8,4 +8,4 @@ responses 只包含 repair.findings 中 severity 为 blocker 或 major 的 id，
 
 若问题源于剧本，审查发现写出证据和所需剧本修改，不擅自改剧本或把生成偏差变成正史。
 
-repair.user_note.note 是用户对上一版产出的修改意见，以它为准；有 previous_output 时在其基础上修改，只改动意见涉及之处，其余保持。
+收到 repair.findings 时只修改被点名的位置，其余内容逐字保持原样，不要整体重写、不要顺手“优化”别处；这能避免每轮改写都引入新问题。repair.user_note.note 是用户对上一版产出的修改意见，以它为准；有 previous_output 时在其基础上修改，只改动意见涉及之处，其余保持。

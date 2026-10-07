@@ -46,7 +46,7 @@ class WriterTests(unittest.TestCase):
         with self.assertRaises(SflError):require(clean,schema_for("adaptation_plan"))
         clean = plan(); clean["episodes"][0]["emotions"] *= 3
         with self.assertRaises(SflError):require(clean,schema_for("adaptation_plan"))
-        for field,value in (("changes",[]),("changes",["a","b","c","d"]),("conflict","")):
+        for field,value in (("changes",[]),("changes",["a","b","c","d"]),("conflict",""),("immutable",[])):
             clean = plan(); clean["episodes"][0][field] = value
             with self.subTest(field=field,value=value),self.assertRaises(SflError):require(clean,schema_for("adaptation_plan"))
         self.assertIn("改编：原文私下交易", plan_text(plan(1)))

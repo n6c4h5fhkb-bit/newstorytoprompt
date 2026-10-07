@@ -7,6 +7,10 @@ from storyforge.config import SflError, load_yaml
 from storyforge.store import Store
 
 
+# Absent on a first review, or for a script that was imported without a beat sheet.
+OPTIONAL_INPUTS = {"previous_findings", "beats"}
+
+
 @dataclass
 class Source:
     data: object
@@ -57,12 +61,15 @@ def build(store: Store, role: str, sources: dict[str, Source], *, repairs: dict 
     allowed = policy["inputs"]
     if forbidden & set(allowed):
         raise SflError(f"Invalid packet policy for {role}: forbidden input allowed")
-    missing = set(allowed) - set(sources)
+    missing = set(allowed) - set(sources) - OPTIONAL_INPUTS
     if missing:
         raise SflError(f"Missing packet inputs for {role}: {sorted(missing)}")
     # Only the allowlist is copied; a caller cannot accidentally leak extra files.
     data, bindings = {}, []
     for name in allowed:
+        if name not in sources:  # only optional inputs may be absent
+            data[name] = [] if name == "previous_findings" else None
+            continue
         data[name] = sources[name].data
         bindings.extend(sources[name].bindings)
     cards = [ROOT / "skills/shared/codex_call.md", ROOT / policy["role_card"], ROOT / "skills/shared/model_output.md"]

@@ -60,7 +60,7 @@ def plan_text(value):
     for ep in value["episodes"]:
         fields = [f"ep{ep['number']:02d}",ep["title"],str(ep["estimated_seconds"]),"、".join(ep["emotions"]),ep["turn"],ep["end_hook"]["type"]+"："+ep["end_hook"]["description"],"是" if ep["major_turn"] else "", "是" if ep["retention_checkpoint"] else "","、".join(ep["source_refs"]),"、".join(ep["beats"])]
         text += "| " + " | ".join(clean_cell(f) for f in fields) + " |\n"
-    text += "\n## 分集对抗与改编点\n\n" + "\n".join(f"- ep{ep['number']:02d} 对抗：{ep['conflict']}\n" + "\n".join(f"  - 改编：{c}" for c in ep["changes"]) for ep in value["episodes"]) + "\n"
+    text += "\n## 分集对抗与改编点\n\n" + "\n".join(f"- ep{ep['number']:02d} 对抗：{ep['conflict']}\n" + "\n".join(f"  - 改编：{c}" for c in ep["changes"]) + "\n" + "\n".join(f"  - 不可动：{c}" for c in ep["immutable"]) for ep in value["episodes"]) + "\n"
     text += "\n## 剪合决定\n\n" + "\n".join(f"- {d['beat_id']}：{d['action']} {d['merge_into']} · {d['reason']}" for d in value["decisions"]) + "\n"
     text += "\n## 开篇候选\n\n" + "\n".join(f"- {h['key']}：{h['label']} · {h['score']:g}" for h in value["hooks"]) + f"\n\n选择：{value['selected_hook']} · {value['reason']}\n"
     text += "\n## 关键与放大时刻\n\n" + "\n".join(f"- {m['id']} · ep{m['episode']:02d} · {'关键' if m['key'] else '普通'} · {m['summary']} · {'、'.join(m['source_refs'])}" for m in value["moments"]) + "\n"
@@ -117,7 +117,8 @@ class Screenwriter:
         timeline = json_source(self.store,"breakdown.json")
         refs = [r for b in timeline.data["beats"] if b["key"] for r in b["source_refs"]]
         sources = {"breakdown":timeline,"source_passages":self.passages(refs),"episode_target":self.target()}
-        def reviews(value, challenges):
+        def reviews(value, challenges, previous=None):
+            sources["previous_findings"] = Source(previous or [],[])
             sources["plan"] = Source(value,[])
             sources["warnings"] = Source([w for e in value["episodes"] for w in check.warnings(e["estimated_seconds"],self.config,f"ep{e['number']:02d}")],[])
             if "plan_reviewer" not in self.runner.stages[stage].get("reviewers",[]):
@@ -203,7 +204,7 @@ class Screenwriter:
                 except SflError as exc:
                     errors.append(str(exc))
                 return errors
-            def reviews(value,challenges):
+            def reviews(value,challenges,previous=None):
                 if not moment["key"] or "payoff_judge" not in self.runner.stages[stage].get("reviewers",[]):
                     only = value["versions"][0]
                     picked.update(choice=only["key"],reason="single_version",sharpened=only["text"],entities=only["entities"],findings=[])
@@ -332,14 +333,16 @@ class Screenwriter:
                 return errors
             except SflError as exc:
                 return [str(exc)]
-        def reviews(value,challenges):
+        def reviews(value,challenges,previous=None):
             candidate_bible = add_entities(original_bible,value["bible_additions"])
             script = parse_script(value["script"])
             used = sorted({n for scene in script.scenes for n in scene.cast} | {l["who"] for scene in script.scenes for l in scene.lines if "who" in l})
             visible = bible_slice(candidate_bible,used,sorted({s.location for s in script.scenes}))
             # The model's own estimate ran about twice too long on a real episode; judge length from the script itself.
             warn = check.warnings(check.script_seconds(value["script"],self.config),self.config,episode,script=value["script"],passages=sources["source_passages"].data)
-            review_sources = {**sources,"script":Source(value["script"],[]),"bible":Source(visible,sources["bible"].bindings),"warnings":Source(warn,[])}
+            from storyforge.checks import rules as check_rules
+            warn += check.rhythm_warnings(value["beats"],check_rules()["rhythm"],episode)
+            review_sources = {**sources,"script":Source(value["script"],[]),"bible":Source(visible,sources["bible"].bindings),"warnings":Source(warn,[]),"beats":Source(value["beats"],[]),"previous_findings":Source(previous or [],[])}
             roles = self.runner.stages[stage].get("reviewers",[])
             def review_role(role):
                 result = self.runner.review(role,"viewer" if role=="viewer" else "findings",stage,episode,review_sources,challenge=challenges)
@@ -348,14 +351,14 @@ class Screenwriter:
             from storyforge.runner.parallel import run
             results = dict(run(roles,review_role,self.config["concurrency"]["llm"]))
             # Keep stage-defined finding order despite different completion times.
-            findings = [finding for role in roles for finding in results[role]["findings"]]
+            findings = self.runner.adjust_findings([finding for role in roles for finding in results[role]["findings"]],previous or [])
             accept_open = self.runner.config.get("fix_policy",{}).get("open_major","card")=="accept"
             review_record.clear(); review_record.update(passed=not any(f["severity"] in (("blocker",) if accept_open else ("blocker","major")) for f in findings),
                 open_findings=[f for f in findings if f["severity"]=="major"],
                 script_fingerprint=digest(value["script"]),reviewers=results,warnings=warn,hook_type=value["hook_type"],format_repairs=list(format_repairs))
             return findings
         def output(value,store):
-            result = {path:value["script"],f"ledger/{episode}.md":value["ledger_out"],f".state/script_reviews/{episode}.json":serialize(review_record)+"\n",
+            result = {path:value["script"],f"beats/{episode}.json":serialize(value["beats"])+"\n",f"ledger/{episode}.md":value["ledger_out"],f".state/script_reviews/{episode}.json":serialize(review_record)+"\n",
                 "bible.md":add_entities(store.text("bible.md"),value["bible_additions"])}
             if pending:
                 notes = store.json("notes/script_notes.json",[])

@@ -24,3 +24,9 @@ placeholder_patterns:
 palette_placeholder: '@色卡'
 continuation_placeholder: '@上段尾帧'
 hook_types: [Danger peak, Pending reveal, Discovery on the brink, Reversal setup, Escalation, Forced decision, Turning line]
+rhythm:
+  min_beats: 6
+  min_pressure_before_burst: 2
+  first_conflict_by_seconds: 10
+  max_gap_seconds: 30
+redo_reasons: [character, action, prop, state, lipsync, voice, scene, camera, style, pace, other]

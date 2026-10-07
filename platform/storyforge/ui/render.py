@@ -5,6 +5,7 @@ import math
 import re
 from urllib.parse import urlencode
 
+from storyforge.checks import rules
 from storyforge.config import SflError, configuration
 from storyforge.runner import service
 
@@ -352,6 +353,7 @@ def episode(ctx, store, state):
             detail("直接编辑这一段 Prompt", form(ctx, "edit_prompt", field("Prompt 全文（保存前会做硬检查：占位符必须在映射里且都被正文用到）", area("text", "", unit["prompt"])),
                 button("保存我的修改", secondary=True), unit=uid)) if unit["prompt"] else None,
             detail("生成后的反馈与连续性", form(ctx, "feedback", field("反馈原因", input_("note", "可选：记录原因")),
+                field("重做原因（仅选“需要重做”时填）", el("select", {"name": "reason"}, [el("option", {"value": ""}, "不选")] + [el("option", {"value": r}, r) for r in rules()["redo_reasons"]])),
                 field("累计生成次数（可选）", input_("generations", "选填", type="number", min=1, step=1, **{"data-number": True})),
                 field("累计人工用时（分钟，可选）", input_("user_minutes", "选填", type="number", min=0, step="any", **{"data-number": True})),
                 el("p", {"class": "muted"}, "按本单元累计填写；公共准备工作计入第一段。留空保留已有报告。"),

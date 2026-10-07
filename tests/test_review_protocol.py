@@ -114,6 +114,33 @@ class ReviewProtocolTests(unittest.TestCase):
         self.assertEqual(self.store.text("repaired.txt"), "accepted")
         self.assertFalse(runner.cards.list())
 
+    def test_format_errors_do_not_use_up_the_rewrites_a_review_still_needs(self):
+        calls = []
+        def transport(profile, packet, schema, **kwargs):
+            calls.append(packet)
+            value = deepcopy(RESPONSES["art_director:ep01"])
+            value["responses"] = [{"finding_id": f["id"], "disposition": "fix", "reason": "已修复"} for f in packet.repairs.get("findings", []) if f["severity"] in ("major", "blocker")]
+            return {"text": serialize(value), "usage": {"input_tokens": 5, "output_tokens": 5}, "error": None}
+        config = configuration()
+        runner = Runner(self.store, config=config, client=Client(self.store, config, codex_transport=transport))
+        finding = {"id": "f_late", "severity": "major", "kind": "error", "location": "style", "evidence": "测试",
+                   "problem": "审查指出的问题", "suggested_fix": "修正", "reviewer": "plan_reviewer", "artifact": "ep01"}
+        validations, reviews = [], []
+        def validator(value):
+            validations.append(1)
+            return [f"格式错误{len(validations)}"] if len(validations) <= 2 else []
+        def reviewer(value, challenges, previous=None):
+            reviews.append(previous)
+            return [dict(finding)] if len(reviews) == 1 else []
+        runner.work("B1", "ep01", {"bible": Source("测试设定", []), "script": Source("测试剧本", [])}, validator,
+                    lambda value, store: {"done.txt": "accepted"}, reviewer=reviewer)
+        # Two format retries, the first review that finds a major, then the rewrite it asked for.
+        self.assertEqual(len(calls), 4)
+        self.assertEqual(reviews[0], [])
+        self.assertEqual([f["id"] for f in reviews[1]], ["f_late"])
+        self.assertEqual(self.store.text("done.txt"), "accepted")
+        self.assertFalse(runner.cards.list())
+
     def test_card_retry_restores_candidate_only_while_its_inputs_are_current(self):
         for changed in (False, True):
             with self.subTest(changed_inputs=changed):
@@ -159,6 +186,46 @@ class ReviewProtocolTests(unittest.TestCase):
                 self.assertFalse(runner.cards.list())
                 bound_paths = {b["path"] for b in store.json(".state/artifacts.json")["retry-result.txt"]["bindings"]}
                 self.assertEqual(card["details"]["candidate_file"] in bound_paths, not changed)
+
+
+class FollowUpTests(unittest.TestCase):
+    def finding(self, severity, location, problem, evidence="一段足够长的证据文字"):
+        return {"severity": severity, "location": location, "problem": problem, "evidence": evidence, "kind": "error", "suggested_fix": "改"}
+
+    def test_a_new_major_that_touches_no_earlier_finding_becomes_a_suggestion(self):
+        from storyforge.runner import limit_new_findings
+        earlier = [self.finding("major", "ep01_u02 镜头3", "沈浩手里的酒杯去向不明", "沈浩转着手中酒杯")]
+        same_place = self.finding("major", "ep01_u02 镜头3", "酒杯仍未交代")
+        same_problem = self.finding("major", "S07", "沈浩手里的酒杯去向不明，可能凭空多出一只")
+        brand_new = self.finding("major", "ep01_u09 镜头1", "台词偏紧", "完全不同的另一句证据")
+        blocker = self.finding("blocker", "ep01_u11 镜头2", "人物凭空消失")
+        result = limit_new_findings([same_place, same_problem, brand_new, blocker], earlier)
+        self.assertEqual([f["severity"] for f in result], ["major", "major", "minor", "blocker"])
+        self.assertTrue(result[2]["demoted"])
+        self.assertTrue(result[2]["problem"].startswith("（复核时的新发现"))
+        # The first round has nothing to follow up, so nothing is changed.
+        self.assertEqual(limit_new_findings([brand_new], []), [brand_new])
+
+    def test_a_finding_the_user_already_decided_on_never_blocks_again(self):
+        from storyforge.runner import respect_user_decision
+        decided = [self.finding("major", "S02 结尾", "第一集目标不清", "沈砚：“这五枚铜板，你亲手还我。”")]
+        again = self.finding("major", "S02 结尾 / 沈砚立誓", "上一轮指出的目标不清仍未解决")
+        different = self.finding("major", "S05", "完全无关的道具数量问题", "另一处证据证据证据")
+        blocker = self.finding("blocker", "S02 结尾", "第一集目标不清且人物消失")
+        result = respect_user_decision([again, different, blocker], decided)
+        self.assertEqual([f["severity"] for f in result], ["minor", "major", "blocker"])
+        self.assertTrue(result[0]["user_decided"])
+        self.assertEqual(respect_user_decision([again], []), [again])
+
+    def test_the_reviewers_that_iterate_receive_the_previous_findings(self):
+        import yaml
+        from storyforge import ROOT
+        policies = yaml.safe_load((ROOT / "platform/packets.yaml").read_text(encoding="utf-8"))
+        for role in ("plan_reviewer", "story_check", "scene_fidelity", "reconstruction_compare"):
+            self.assertIn("previous_findings", policies[role]["inputs"], role)
+            self.assertIn("skills/shared/re_review.md", policies[role]["references"], role)
+        self.assertNotIn("previous_findings", policies["reconstruction_blind"]["inputs"])
+        self.assertNotIn("previous_findings", policies["viewer"]["inputs"])
 
 
 if __name__ == "__main__":

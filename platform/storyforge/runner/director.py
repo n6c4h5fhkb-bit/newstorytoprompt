@@ -42,6 +42,7 @@ class Director:
         model.data = self.runner.card
         return {"bible": file_source(self.store, "bible.md", {"kind": "bible", "names": names, "locations": locations}),
                 "script": deepcopy(self._script_source),
+                "beats": file_source(self.store, f"beats/{self.episode}.json"),
                 "style": file_source(self.store, "style.md"),
                 "assets": file_source(self.store, "assets.csv"),
                 "ledger_in": file_source(self.store, f"ledger/ep{self.number-1:02d}.md"),
@@ -216,14 +217,15 @@ class Director:
             carry = template.format(planned=carry, notes="；".join(n["target"] + "：" + n["note"] for n in notes.data))
         return Source(carry, file_source(self.store, path, {"kind": "unit_carry", "id": unit["id"]}).bindings + notes.bindings + format_bindings)
 
-    def scene_reviews(self, candidate: dict, challenges: list[dict]) -> list[dict]:
+    def scene_reviews(self, candidate: dict, challenges: list[dict], previous=None) -> list[dict]:
         result = []
-        previous = self.previous_carry()
+        previous_carry = self.previous_carry()
         for scene in self.script.scenes:
             units = [u for u in candidate["units"] if u["scene"] == scene.id]
             sources = self.sources()
             sources.update(script_scene=Source(scene.text, sources["script"].bindings), units=Source(units, []),
-                previous_carry_out=previous, warnings=Source(warnings(candidate, self.config), []))
+                previous_carry_out=previous_carry, warnings=Source(warnings(candidate, self.config), []),
+                previous_findings=Source(previous or [], []))
             ids = sorted({a for u in units for a in u["assets"]})
             sources["assets"] = file_source(self.store, "assets.csv", {"kind": "assets", "ids": ids})
             reviewed = self.runner.review("scene_fidelity", "scene_review", "B5", f"{self.episode}:{scene.id}", sources, challenge=challenges)
@@ -240,7 +242,7 @@ class Director:
                 raise ScriptRevisionNeeded(note_ids)
             result.extend(reviewed["findings"])
             if units:
-                previous = Source(units[-1]["carry_out"], [])
+                previous_carry = Source(units[-1]["carry_out"], [])
         return result
 
     def storyboard(self, stage: str, *, force=False, repairs=None):
@@ -288,7 +290,7 @@ class Director:
             def validate(value):
                 if value["asset_requests"]:
                     raise MissingAssets(value["asset_requests"])
-                return check_storyboard(value, self.script, self.bible, selected, self.runner.card)
+                return check_storyboard(value, self.script, self.bible, selected, self.runner.card, speech_rate=self.config["speech_rate_chars_per_sec"])
             def output(value, store):
                 normalized = deepcopy(value)
                 normalized.pop("responses", None)
@@ -492,6 +494,7 @@ class Director:
                 continue
             if resolution and resolution["answer"]["choice"] == "retry":
                 self.unit_prompts("B7", only=[uid], repairs={"user_note": resolution["answer"]})
+            earlier = []  # actionable findings of the previous round, re-checked instead of starting a new open-ended review
             for attempt in range(self.config["fix_rounds"] + 1):
                 mappings_path = f"refs/{self.episode}.json"
                 refs = self.store.json(mappings_path)[uid]
@@ -504,7 +507,7 @@ class Director:
                         [self.store.binding(f"refs/units/{uid}.json")]),
                     warnings=Source(prompt_warnings, []))
                 unit_binding = self.store.binding(f"storyboard/{self.episode}.json", {"kind": "unit", "id": uid})
-                sources.update(reconstruction=Source("", []), unit=Source(unit, [unit_binding]))
+                sources.update(reconstruction=Source("", []), unit=Source(unit, [unit_binding]), previous_findings=Source(earlier, []))
                 # The blind reader may only see warnings that can be read off the prompt text itself;
                 # shot-level ones (speech fit, overlays, runtime) come from the storyboard.
                 blind_kinds = rules()["blind_warning_kinds"]
@@ -524,7 +527,8 @@ class Director:
                         blind = self.runner.review("reconstruction_blind", "reconstruction", stage, uid, blind_sources)
                         sources["reconstruction"] = Source(blind["description"], bindings)
                         compared = self.runner.review("reconstruction_compare", "findings", stage, uid, sources, challenge=challenges)
-                        findings = blind["findings"] + compared["findings"]
+                        from storyforge.runner import limit_new_findings
+                        findings = limit_new_findings(blind["findings"] + compared["findings"], earlier)
                         self.store.write(f"findings/reconstruction/{uid}_{digest(findings)[:12]}.json", {"blind": blind, "compare": compared}, json_data=True)
                     actionable = [f for f in findings if f["severity"] in ("blocker", "major")]
                     # The user's own wording is final: reviewer findings stay in the record as notes, never trigger a rewrite.
@@ -549,6 +553,7 @@ class Director:
                         self.store.end_job(job, "blocked", "Awaiting " + card["id"])
                         waiting.append(uid)
                         break
+                    earlier = actionable
                     self.unit_prompts("B7", only=[uid], repairs={"hard_errors": errors, "findings": actionable})
                 except CallPaused as exc:
                     self.store.end_job(job, "paused", str(exc))

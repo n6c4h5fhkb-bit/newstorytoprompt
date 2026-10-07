@@ -69,7 +69,7 @@ def asset_rows(rows: list[dict], bible: dict) -> list[str]:
     return errors
 
 
-def storyboard(board: dict, script, bible: dict, assets: list[dict], card: dict) -> list[str]:
+def storyboard(board: dict, script, bible: dict, assets: list[dict], card: dict, *, speech_rate: float | None = None) -> list[str]:
     errors = []
     if board.get("episode") != script.episode:
         errors.append("Storyboard episode does not match script")
@@ -101,6 +101,17 @@ def storyboard(board: dict, script, bible: dict, assets: list[dict], card: dict)
         shots = unit.get("shots", [])
         if not shots:
             errors.append(f"{uid}: no shots")
+        limit = card.get("max_shots_per_unit")
+        if limit and len(shots) > limit:
+            errors.append(f"{uid}: {len(shots)} shots in one unit; the model handles at most {limit}. Keep one core action per unit and move the rest into a following unit")
+        shortest = card.get("min_shot_seconds")
+        for shot in shots:
+            if shortest and isinstance(shot.get("seconds"), (int, float)) and shot["seconds"] < shortest:
+                errors.append(f"{uid} {shot.get('id')}: shot of {shot['seconds']}s is under the {shortest}s minimum; merge it into a neighbouring shot")
+            if speech_rate and card.get("speech_overrun_limit"):
+                chars = sum(len(l.get("line", "")) for l in shot.get("dialogue", []))
+                if isinstance(shot.get("seconds"), (int, float)) and shot["seconds"] > 0 and chars / speech_rate > shot["seconds"] * card["speech_overrun_limit"]:
+                    errors.append(f"{uid} {shot.get('id')}: {chars} characters of dialogue cannot be spoken in {shot['seconds']}s at {speech_rate} chars/s; lengthen the shot, shorten the line, or split the unit")
         if abs(sum(s.get("seconds", 0) for s in shots) - seconds) > 0.01:
             errors.append(f"{uid}: shot lengths do not sum to unit length")
         if len({s.get('id') for s in shots}) != len(shots):
@@ -132,10 +143,10 @@ def storyboard(board: dict, script, bible: dict, assets: list[dict], card: dict)
         mapped_characters = {a["name"] for a in selected if a["type"] == "character"}
         # A speaker listed only under Voices (an unseen old voice, a system) is heard through its voice asset, never drawn.
         voice_only = set(bible.get("Voices", {})) - set(bible.get("Characters", {}))
-        lacking = (onscreen | offscreen) - mapped_characters - voice_only
+        # Only people who appear in a shot need an image reference. Off-screen people are described in words unless the storyboarder lists them.
+        lacking = onscreen - mapped_characters - voice_only
         if lacking:
-            errors.append(f"{uid}: present cast missing from assets: {', '.join(sorted(lacking))} — add their char: asset IDs to this unit's assets, "
-                          "or, if they have left the scene, list them under absent with a reason instead of offscreen")
+            errors.append(f"{uid}: present cast missing from assets: {', '.join(sorted(lacking))} — add their char: asset IDs to this unit's assets (an on-screen person needs a reference)")
         if not any(a["type"] == "location" and a["name"] == scene.location for a in selected):
             errors.append(f"{uid}: location missing from assets")
         for shot in shots:

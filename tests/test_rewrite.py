@@ -147,6 +147,55 @@ class OpenReviewNotesTests(unittest.TestCase):
         self.assertNotIn("## 审查提示", store.text("delivery/ep01/u01.md"))
 
 
+class QualityLoopTests(unittest.TestCase):
+    def test_redo_reasons_are_validated_and_recorded(self):
+        with tempfile.TemporaryDirectory(prefix="sfl-reasons-") as folder:
+            store, runner, model = delivered(folder)
+            with self.assertRaisesRegex(SflError, "Unknown redo reason"):
+                service.feedback(store, "ep01_u01", "redo", "手多了一只", reasons=["finger"])
+            with self.assertRaisesRegex(SflError, "only apply to a redo"):
+                service.feedback(store, "ep01_u01", "ok", reasons=["prop"])
+            service.feedback(store, "ep01_u01", "redo", "多出第二副腕镣", reasons=["prop", "state"])
+            row = store.logs("feedback")[-1]
+            self.assertEqual(row["reasons"], ["prop", "state"])
+
+    def test_review_signal_compares_redo_rates_with_and_without_open_review_notes(self):
+        from storyforge.runner.metrics import review_signal
+        with tempfile.TemporaryDirectory(prefix="sfl-signal-") as folder:
+            store, runner, model = delivered(folder)
+            manifest = store.json("delivery/ep01/manifest.json")
+            manifest["demo"] = False
+            manifest["units"][0]["open_review_notes"] = [{"location": "镜头1", "problem": "x"}]
+            manifest["units"][1]["open_review_notes"] = []
+            manifest["units"][2]["open_review_notes"] = []
+            store.write("delivery/ep01/manifest.json", manifest, json_data=True)
+            for unit, result, reasons in (("ep01_u01", "ok", []), ("ep01_u02", "redo", ["prop"]), ("ep01_u03", "ok", [])):
+                store.append("feedback", {"unit": unit, "result": result, "reasons": reasons, "demo": False})
+            signal = review_signal(store, minimum_units=1)
+            self.assertEqual(signal["groups"]["with_open_notes"], {"units": 1, "redo": 0})
+            self.assertEqual(signal["groups"]["without_open_notes"], {"units": 2, "redo": 1})
+            self.assertEqual(signal["verdict"], "reviews_do_not_predict_redo")
+            self.assertEqual(signal["redo_reasons"], {"prop": 1})
+            self.assertEqual(review_signal(store)["verdict"], "not_enough_data")
+
+    def test_gold_examples_regress_the_mechanical_checks(self):
+        with tempfile.TemporaryDirectory(prefix="sfl-gold-") as folder:
+            store, runner, model = delivered(folder)
+            service.gold_add(store, "ep01_u01", "good", "站位清楚")
+            service.gold_add(store, "ep01_u02", "bad", "手部多出物件")
+            report = service.gold_check(store)
+            self.assertEqual(report["examples"], 2)
+            self.assertEqual(report["good_now_failing"], [])
+            self.assertEqual(report["bad_not_mechanical"], ["ep01_u02"])
+            gold = store.json("gold/ep01_u01.json")
+            gold["prompt"] += "\n空间锚：木门在左\n"
+            store.write("gold/ep01_u01.json", gold, json_data=True)
+            report = service.gold_check(store)
+            self.assertEqual([g["unit"] for g in report["good_now_failing"]], ["ep01_u01"])
+            with self.assertRaisesRegex(SflError, "label good or bad"):
+                service.gold_add(store, "ep01_u01", "fine")
+
+
 class AdoptAndEditTests(unittest.TestCase):
     def test_an_adopted_prompt_keeps_the_users_wording_even_when_a_reviewer_objects(self):
         finding = {"severity": "major", "kind": "error", "location": "ep01_u02", "evidence": "用户加的ADOPTMARK",

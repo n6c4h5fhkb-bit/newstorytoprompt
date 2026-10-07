@@ -1,6 +1,7 @@
 from __future__ import annotations
 from pathlib import Path
 import re
+import threading
 
 import yaml
 
@@ -33,6 +34,11 @@ class Runner:
         self.client = client or Client(store, self.config)
         self.stages = load_yaml(ROOT / "platform" / "stages.yaml")
         self.allowed_stale = []
+        self._local = threading.local()
+
+    def adjust_findings(self, findings: list[dict], previous: list[dict]) -> list[dict]:
+        """The same demotions work() applies, for callbacks that record a verdict from the raw findings."""
+        return respect_user_decision(limit_new_findings(findings, previous), getattr(self._local, "decided", []))
 
     def check_control(self):
         if self.store.json(".runtime/control.json", {}).get("paused"):
@@ -133,6 +139,8 @@ class Runner:
             raise StageBlocked("User stopped this stage target")
         repairs = dict(repairs or {})
         retry_bindings = []
+        decided = []
+        self._local.decided = decided
         if resolution and resolution["answer"]["choice"] == "retry":
             candidate_path = resolution["details"].get("candidate_file", "")
             if candidate_path.startswith(".state/stuck/"):
@@ -140,6 +148,7 @@ class Runner:
                 saved = saved_source.data
                 if isinstance(saved, dict) and saved.get("candidate") is not None and saved.get("bindings") \
                         and self.store.unchanged(saved["bindings"], include_style=False):
+                    decided[:] = [f for f in saved.get("findings", []) if f["severity"] in ("blocker", "major")] if resolution["answer"].get("note", "").strip() else []
                     repairs = {"previous_output": saved["candidate"], "hard_errors": saved.get("errors", []),
                         "findings": [f for f in saved.get("findings", []) if f["severity"] in ("blocker", "major")], **repairs}
                     # Bind the saved draft and its still-current factual inputs;
@@ -159,8 +168,11 @@ class Runner:
         bindings = packet.bindings + extra
         job = self.store.start_job(stage, target, bindings)
         last, errors, findings, held = None, [], list(repairs.get("findings", [])), set()
+        previous = [f for f in findings if f["severity"] in ("blocker", "major")]
+        # Hard-error retries and review-driven rewrites have separate budgets, so fixing a format slip never uses up the rewrites a review still needs.
+        hard_left, rounds_left = self.config.get("hard_retries", 2), self.config["fix_rounds"]
         try:
-            for attempt in range(self.config["fix_rounds"] + 1):
+            while True:
                 self.check_control()
                 self.budget(stage, target)
                 packet = build(self.store, spec["role"], sources, repairs=repairs)
@@ -180,10 +192,13 @@ class Runner:
                 except OutputError as exc:
                     errors, last = [str(exc)], exc.previous
                 if errors:
+                    if hard_left <= 0:
+                        break
+                    hard_left -= 1
                     repairs = {**repairs, "hard_errors": errors, "previous_output": last}
                     continue
                 responses = [r for r in last.get("responses", []) if r["disposition"] == "reject"]
-                findings = reviewer(last, responses) if reviewer else []
+                findings = respect_user_decision(limit_new_findings(call_reviewer(reviewer, last, responses, previous), previous), decided) if reviewer else []
                 held = {f["id"] for f in findings if f["severity"] == "blocker"} & {r["finding_id"] for r in responses}
                 actionable = [f for f in findings if f["severity"] in ("blocker", "major")]
                 if not actionable:
@@ -192,8 +207,10 @@ class Runner:
                         raise StageBlocked("Inputs changed; result retained as stale candidate")
                     return last
                 repairs = {**repairs, "findings": actionable, "previous_output": last}
-                if held:
+                previous = actionable
+                if held or rounds_left <= 0:
                     break
+                rounds_left -= 1
             if last is not None and not errors and not held and self.config.get("fix_policy", {}).get("open_major", "card") == "accept" \
                     and not any(f["severity"] == "blocker" for f in findings):
                 # Reviewers keep finding something new after every rewrite; majors that survive the fix rounds are recorded, not escalated.
@@ -306,6 +323,50 @@ class Runner:
                     if stage == until:
                         break
         return report
+
+
+FOLLOW_UP_TOKEN = re.compile(r"S\d+|ep\d+_u\d+|\bu\d+\b|\bs\d+\b|镜头\d+|episodes\[\d+\]|第\d+集|ep\d+")
+
+
+def respect_user_decision(findings: list[dict], decided: list[dict]) -> list[dict]:
+    """The user already answered a card about these findings; a major that is about the same thing is shown as a note, never blocks again."""
+    result = []
+    for finding in findings:
+        if decided and finding["severity"] == "major" and any(related(finding, earlier) for earlier in decided):
+            finding = {**finding, "severity": "minor", "user_decided": True, "problem": "（你已就此作出决定，保持现状）" + finding["problem"]}
+        result.append(finding)
+    return result
+
+
+def call_reviewer(reviewer, value, responses, previous):
+    import inspect
+    parameters = inspect.signature(reviewer).parameters.values()
+    takes_previous = any(p.kind == p.VAR_POSITIONAL for p in parameters) or len(list(parameters)) >= 3
+    return reviewer(value, responses, previous) if takes_previous else reviewer(value, responses)
+
+
+def related(finding: dict, earlier: dict) -> bool:
+    """Whether a re-review finding is about the same place or problem as a finding from the previous round."""
+    tokens = lambda f: set(FOLLOW_UP_TOKEN.findall(f.get("location") or ""))
+    if tokens(finding) & tokens(earlier):
+        return True
+    a, b = finding.get("evidence") or "", earlier.get("evidence") or ""
+    if len(a) >= 6 and len(b) >= 6 and (a in b or b in a):
+        return True
+    from difflib import SequenceMatcher
+    return SequenceMatcher(None, finding.get("problem") or "", earlier.get("problem") or "").ratio() >= 0.45
+
+
+def limit_new_findings(findings: list[dict], previous: list[dict]) -> list[dict]:
+    """A re-review checks the earlier findings; a brand-new major that touches none of them is kept as a suggestion, not a blocker."""
+    if not previous:
+        return findings
+    result = []
+    for finding in findings:
+        if finding["severity"] == "major" and not any(related(finding, earlier) for earlier in previous):
+            finding = {**finding, "severity": "minor", "demoted": True, "problem": "（复核时的新发现，作为建议）" + finding["problem"]}
+        result.append(finding)
+    return result
 
 
 def leaf_strings(value) -> list[str]:

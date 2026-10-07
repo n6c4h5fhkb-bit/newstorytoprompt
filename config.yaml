@@ -13,7 +13,8 @@ speech_rate_chars_per_sec: 4.5
 action_seconds: 1.5  # per action or sound line; calibrate against real clips
 episode_minutes: {min: 3, max: 5}
 card: {score_margin: 0.1, max_open_per_phase: 3}
-fix_rounds: 2
+fix_rounds: 2          # rewrites a review may ask for
+hard_retries: 2        # retries for hard-check or format errors, counted separately
 fix_policy: {open_major: card}  # card: escalate majors still open after the fix rounds; accept: record them and continue (blockers always escalate)
 external_attempts: 3  # Total attempts for retryable transport failures; CLI native retries are disabled.
 warnings: {source_overlap: 0.15, source_overlap_high: 0.4, prompt_chars: 3500}

@@ -5,6 +5,7 @@ from pathlib import Path
 import sys
 
 from storyforge import ROOT
+from storyforge.checks import rules
 from storyforge.config import SflError, configuration, model_card
 from storyforge.cards import Cards
 from storyforge.delivery import export
@@ -55,6 +56,7 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("unit_id")
     p.add_argument("result", choices=("ok", "redo"))
     p.add_argument("--note", default="")
+    p.add_argument("--reason", action="append", default=[], help="Why it needed a redo (repeatable): " + ", ".join(rules()["redo_reasons"]))
     p.add_argument("--generations",type=int,help="Cumulative external generations for this unit")
     p.add_argument("--user-minutes",type=float,help="Cumulative human minutes for this unit")
     p = commands.add_parser("finish",help="Report an externally completed episode")
@@ -85,6 +87,12 @@ def parser() -> argparse.ArgumentParser:
     p = commands.add_parser("dismiss", help="Reject a pending script note (id from notes/script_notes.json), e.g. a reviewer's mistake")
     p.add_argument("note_id")
     p.add_argument("--reason", default="")
+    p = commands.add_parser("gold-add", help="Keep a delivered unit as a labelled good or bad example")
+    p.add_argument("unit_id")
+    p.add_argument("label", choices=("good", "bad"))
+    p.add_argument("--note", default="")
+    p = commands.add_parser("gold-check", help="Re-run the mechanical checks over the labelled examples")
+    p.add_argument("project")
     p = commands.add_parser("pause")
     p.add_argument("project")
     p = commands.add_parser("inbox")
@@ -189,7 +197,7 @@ def dispatch(args):
     if command == "export":
         return {"delivery": str(export(store, args.episode, model_card(configuration(store.root))))}
     if command == "feedback":
-        service.feedback(store, args.unit_id, args.result, args.note,generations=args.generations,user_minutes=args.user_minutes)
+        service.feedback(store, args.unit_id, args.result, args.note,generations=args.generations,user_minutes=args.user_minutes,reasons=args.reason)
         return service.metrics(store)
     if command == "finish":
         service.finish_episode(store,args.target,user_minutes=args.user_minutes,note=args.note)

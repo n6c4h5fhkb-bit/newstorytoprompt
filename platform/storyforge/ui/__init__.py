@@ -78,7 +78,7 @@ class Application:
         if action == "note":
             return service.note(store, body["target"], body["note"])
         if action == "feedback":
-            service.feedback(store, body["unit"], body["result"], body.get("note", ""),generations=body.get("generations"),user_minutes=body.get("user_minutes"))
+            service.feedback(store, body["unit"], body["result"], body.get("note", ""),generations=body.get("generations"),user_minutes=body.get("user_minutes"),reasons=[body["reason"]] if body.get("reason") else [])
             return service.metrics(store)
         if action == "finish":
             service.finish_episode(store,body["episode"],user_minutes=body.get("user_minutes"),note=body.get("note",""))

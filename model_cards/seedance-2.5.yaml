@@ -4,6 +4,9 @@ refs: {images: null, videos: null, audio: null}
 max_total_refs: 50
 multi_shot: true
 timestamp_control: unverified
+max_shots_per_unit: null
+min_shot_seconds: null
+speech_overrun_limit: 1.3
 readable_text: unverified
 native_audio: true
 verification: blocked-until-account-limits-are-filled-in

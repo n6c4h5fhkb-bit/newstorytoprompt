@@ -15,9 +15,9 @@ adapt_plan:
   references: [skills/writer/taste/short_drama_craft.md, skills/writer/taste/audience_rubric.md, skills/writer/taste/differentiation_card.md, skills/writer/taste/source_addresses.md, skills/writer/taste/bible_and_ledger.md]
 plan_reviewer:
   role_card: skills/writer/reviewers/plan_reviewer.md
-  inputs: [plan, breakdown, source_passages, warnings]
+  inputs: [plan, breakdown, source_passages, warnings, previous_findings]
   must_not_see: [later_ledger, writer_reasoning]
-  references: [skills/writer/taste/short_drama_craft.md, skills/writer/taste/audience_rubric.md, skills/writer/taste/differentiation_card.md, skills/shared/finding_format.md, skills/writer/taste/bible_and_ledger.md]
+  references: [skills/shared/re_review.md, skills/writer/taste/short_drama_craft.md, skills/writer/taste/audience_rubric.md, skills/writer/taste/differentiation_card.md, skills/shared/finding_format.md, skills/writer/taste/bible_and_ledger.md]
 amplify:
   role_card: skills/writer/roles/amplify.md
   inputs: [moment, plan_slice, direction, source_passages, variant_count]
@@ -40,9 +40,9 @@ viewer:
   references: [skills/writer/taste/audience_rubric.md, skills/shared/finding_format.md]
 story_check:
   role_card: skills/writer/reviewers/story_check.md
-  inputs: [script, plan_slice, adopted_script, bible, ledger_in, source_passages, script_notes, warnings]
+  inputs: [script, beats, plan_slice, adopted_script, bible, ledger_in, source_passages, script_notes, warnings, previous_findings]
   must_not_see: [ledger_out, later_ledger, writer_reasoning]
-  references: [skills/writer/taste/short_drama_craft.md, skills/writer/taste/audience_rubric.md, skills/shared/finding_format.md, skills/writer/taste/revision_fidelity.md]
+  references: [skills/shared/re_review.md, skills/writer/taste/short_drama_craft.md, skills/writer/taste/audience_rubric.md, skills/shared/finding_format.md, skills/writer/taste/revision_fidelity.md]
 art_director:
   role_card: skills/director/roles/art_director.md
   inputs: [bible, script]
@@ -60,14 +60,14 @@ asset_prompt:
   references: [skills/director/taste/style_guide.md, skills/director/taste/asset_composition.md]
 storyboard:
   role_card: skills/director/roles/storyboard.md
-  inputs: [script, bible, ledger_in, previous_carry_out, continuity_notes, assets, style, model_card]
+  inputs: [script, beats, bible, ledger_in, previous_carry_out, continuity_notes, assets, style, model_card]
   must_not_see: [writer_reasoning, later_ledger, ledger_out]
   references: [skills/director/taste/shot_rules.md, skills/director/taste/asset_composition.md]
 scene_fidelity:
   role_card: skills/director/reviewers/scene_fidelity.md
-  inputs: [script_scene, ledger_in, previous_carry_out, continuity_notes, units, assets, warnings]
+  inputs: [script_scene, ledger_in, previous_carry_out, continuity_notes, units, assets, warnings, previous_findings]
   must_not_see: [writer_reasoning, later_ledger, ledger_out]
-  references: [skills/shared/finding_format.md, skills/director/taste/asset_composition.md]
+  references: [skills/shared/re_review.md, skills/shared/finding_format.md, skills/director/taste/asset_composition.md]
 unit_prompt:
   role_card: skills/director/roles/unit_prompt.md
   inputs: [units, mappings, style, model_card, warnings]
@@ -80,6 +80,6 @@ reconstruction_blind:
   references: [skills/shared/finding_format.md]
 reconstruction_compare:
   role_card: skills/director/reviewers/reconstruction_compare.md
-  inputs: [reconstruction, unit, warnings]
+  inputs: [reconstruction, unit, warnings, previous_findings]
   must_not_see: [script, script_scene, writer_reasoning, later_ledger, ledger_out]
-  references: [skills/shared/finding_format.md, skills/director/taste/asset_composition.md]
+  references: [skills/shared/re_review.md, skills/shared/finding_format.md, skills/director/taste/asset_composition.md]

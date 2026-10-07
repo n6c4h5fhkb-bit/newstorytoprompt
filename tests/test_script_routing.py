@@ -102,6 +102,28 @@ class ScriptRoutingTests(unittest.TestCase):
         writer = [p for p in model.packets if p[0]=="episode_writer"][-1][2]
         self.assertTrue(any(n["note"]==note["note"] for n in writer["script_notes"]))
 
+    def test_a_fresh_major_each_round_no_longer_blocks_the_stage(self):
+        temporary = tempfile.TemporaryDirectory(prefix="sfl-followup-")
+        self.addCleanup(temporary.cleanup)
+        store = create_project(Path(temporary.name)/"synthetic",{"name":"synthetic","demo":True})
+        import_episode(store,SCRIPT,BIBLE,LEDGER)
+        seen = []
+        def mutate(value,packet,target,count):
+            if packet.role=="scene_fidelity" and "妖商站在柜台后" in packet.data["script_scene"]:
+                seen.append((count, [f["location"] for f in packet.data["previous_findings"]]))
+                if count==1:
+                    value["findings"] = [{"severity":"major","kind":"error","location":"S01 镜头1","evidence":"妖商站在柜台后","problem":"站位交代不够具体","suggested_fix":"补一句"}]
+                else:
+                    value["findings"] = [{"severity":"major","kind":"error","location":"S09 镜头9","evidence":"手握铜钥匙","problem":"另一处全新的挑剔","suggested_fix":"再补"}]
+        runner, model = writer_runner(store,mutate=mutate)
+        self.assertTrue(runner.run(until="B4")["waiting"])
+        runner.cards.answer(next(c for c in runner.cards.list() if c["stage"]=="B4")["id"],"approve")
+        runner.run(until="B5")
+        self.assertFalse([c for c in runner.cards.list() if c["kind"]=="stuck"])
+        self.assertTrue(store.current("storyboard/ep01.json"))
+        self.assertEqual(seen[0][1], [])
+        self.assertEqual(seen[1][1], ["S01 镜头1"], "the second round is a follow-up of the first")
+
 
 class OpenMajorPolicyTests(unittest.TestCase):
     FINDING = {"severity":"major","kind":"error","location":"S01","evidence":"妖商站在柜台后","problem":"站位交代不够具体","suggested_fix":"补一句站位"}
