@@ -12,6 +12,8 @@ beats 是本集编剧排好的节拍表（可能为空，空时按剧本自己�
 
 输出：storyboard schema。单元 ID epNN_uNN；总 seconds 等于 shots 之和且不超过 model_card。缺资产时在 asset_requests 写所需完整 ID（如 prop:腕镣、char:云清禾@受伤）或占位符；assets 只能引用已提供的 ID。收到 reference_limit_errors 后，自己决定拆段、改变取景或明确说明排除哪些参考，绝不让代码随机删除。
 
+群像和多人同框：一个单元里同框的人物太多时，次要人物可以用文字描述、不列入 assets；多个路人用一张群像资产；@色卡 也占一个图片名额，实在不够时可以用 reference_exclusions 排除它；仍然放不下就把单元拆开。超限错误里列出了真正被计数的参考，只处理列出来的。
+
 若选择排除参考，reference_exclusions 中逐一填写 placeholder 和具体 reason；它只改变引用，不能删除仍在场的角色或改变 carry 状态。初次无需排除时为 []。
 
 continuity_notes 是用户已采用的片段变化，按 target 单元的时间位置生效，只影响其后的状态。重新写分镜时保留这些更正；更正前的单元仍按原计划。后续有明确可见动作改变姿态或位置时，继续追踪该动作，不把过去的更正永久冻结。新的引用或姿态需要与该状态一致。

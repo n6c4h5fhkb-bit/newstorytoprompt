@@ -51,6 +51,17 @@ class WriterTests(unittest.TestCase):
             with self.subTest(field=field,value=value),self.assertRaises(SflError):require(clean,schema_for("adaptation_plan"))
         self.assertIn("改编：原文私下交易", plan_text(plan(1)))
 
+    def test_a_script_may_use_an_existing_character_the_plan_did_not_list(self):
+        def mutate(value, packet, target, count):
+            if packet.role == "adapt_plan":
+                for episode in value["episodes"]:
+                    episode["characters"] = ["林恒", "云清禾"]  # 妖商 is in the bible and the script, but not in the plan's cast
+        runner, model = writer_runner(self.store, mutate=mutate)
+        report = runner.run(until="A10")
+        self.assertFalse([c for c in runner.cards.list() if c["kind"] == "stuck"], report)
+        self.assertTrue(any(c["stage"] == "A8" for c in runner.cards.list()))
+        self.assertIn("妖商", self.store.text("episodes/ep01.md"))
+
     def test_copied_dialogue_is_flagged_high_but_rewritten_dialogue_is_not(self):
         from tests.support import FIXTURE
         from storyforge.checks.parsers import parse_script

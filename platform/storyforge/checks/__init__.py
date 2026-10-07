@@ -89,7 +89,7 @@ def storyboard(board: dict, script, bible: dict, assets: list[dict], card: dict,
         unit_ids.add(uid)
         scene = scenes.get(unit.get("scene"))
         if not scene:
-            errors.append(f"{uid}: unknown scene")
+            errors.append(f"{uid}: unknown scene {unit.get('scene')!r}; scene must be exactly one of the script's scene IDs: {', '.join(scenes)}")
             continue
         covered_scenes.add(scene.id)
         if scene_order[scene.id] < last_scene:
@@ -123,7 +123,7 @@ def storyboard(board: dict, script, bible: dict, assets: list[dict], card: dict,
             absence = {a["name"]: a["reason"] for a in absence}
         for name in onscreen | offscreen | set(absence):
             if name not in known:
-                errors.append(f"{uid}: unknown character {name}")
+                errors.append(f"{uid}: unknown character {name}" + (" — on_screen, offscreen and absent take character names such as 沈砚, not asset IDs; props go in assets" if ":" in name or "@" in name else ""))
             if name not in scene.cast:
                 errors.append(f"{uid}: {name} not in scene cast")
         missing = set(scene.cast) - onscreen - offscreen - {n for n, reason in absence.items() if str(reason).strip()}
@@ -178,7 +178,10 @@ def references(mapping: list[dict], card: dict) -> list[str]:
         errors.append("Duplicate mapped placeholder")
     for category, limit in card["refs"].items():
         if counts[category] > limit:
-            errors.append(f"Reference limit: {category} {counts[category]} > {limit}; storyboarder must decide")
+            counted = [r["placeholder"] for r in mapping if r["category"] == category]
+            errors.append(f"Reference limit: {category} {counts[category]} > {limit}; the {counts[category]} counted are {', '.join(counted)} "
+                          f"(the palette and the previous-frame reference are added by code and count too). Cut {counts[category] - limit}: add reference_exclusions "
+                          "(with a reason) for the palette, a resting prop or a minor character who appears only briefly, or split the unit. Excluding something that is not in the list above changes nothing")
     if card.get("max_total_refs") and len(mapping) > card["max_total_refs"]:
         errors.append("Total reference limit exceeded")
     for reference in mapping:

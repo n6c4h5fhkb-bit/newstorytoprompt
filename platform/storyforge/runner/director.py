@@ -15,6 +15,45 @@ from storyforge.runner import StageBlocked, ScriptRevisionNeeded
 from storyforge.store import Store, digest, serialize
 
 
+NON_CHARACTER_ID = re.compile(r"^(?:prop|loc|ui|voice|music|layout):")
+
+
+def normalize_cast_names(board: dict) -> None:
+    """on_screen, offscreen and absent hold character names; a model sometimes writes asset IDs (char:沈砚@受伤, prop:旧玉佩) there."""
+    def clean(name):
+        name = str(name).strip()
+        if NON_CHARACTER_ID.match(name):
+            return None  # a prop or a place belongs in assets, never in the cast lists
+        if name.startswith("char:"):
+            name = name[5:]
+        return name.split("@")[0].strip() or None
+    for unit in board.get("units", []):
+        for shot in unit.get("shots", []):
+            shot["on_screen"] = list(dict.fromkeys(n for n in map(clean, shot.get("on_screen", [])) if n))
+        unit["offscreen"] = list(dict.fromkeys(n for n in map(clean, unit.get("offscreen", [])) if n))
+        seen = set()
+        kept = []
+        for entry in unit.get("absent", []):
+            name = clean(entry.get("name", "")) if isinstance(entry, dict) else None
+            if name and name not in seen:
+                seen.add(name)
+                kept.append({**entry, "name": name})
+        unit["absent"] = kept
+
+
+def normalize_scenes(board: dict, scene_ids: list[str]) -> None:
+    """A unit's scene is the ID (S01); a model sometimes writes the whole heading (S01 后山草棚 · 夜 · 内)."""
+    for unit in board.get("units", []):
+        match = re.match(r"S\d+", str(unit.get("scene", "")).strip())
+        if match and match[0] in scene_ids and unit["scene"] != match[0]:
+            unit["scene"] = match[0]
+
+
+def normalize_request(request: str) -> str:
+    """An asset request names an ID or placeholder; a model sometimes appends a description in brackets, which is not part of the ID."""
+    return re.split(r"[（(]", request.strip(), maxsplit=1)[0].strip()
+
+
 class Director:
     def __init__(self, runner, number: int):
         self.runner, self.store, self.config = runner, runner.store, runner.config
@@ -101,7 +140,7 @@ class Director:
         # to those same rows must not restart the completed extraction stage.
         for binding in sources["assets"].bindings:
             binding["style_reference"] = True
-        requests = self.store.json(f".state/asset_requests/{self.episode}.json", [])
+        requests = [normalize_request(r) for r in self.store.json(f".state/asset_requests/{self.episode}.json", [])]
         sources["asset_requests"].data = requests
         def merged(value, current):
             result = {row["id"]: row for row in current}
@@ -288,8 +327,10 @@ class Director:
             sources["assets"].data = selected
             sources["previous_carry_out"] = self.previous_carry()
             def validate(value):
+                normalize_scenes(value, [s.id for s in self.script.scenes])
+                normalize_cast_names(value)
                 if value["asset_requests"]:
-                    raise MissingAssets(value["asset_requests"])
+                    raise MissingAssets([normalize_request(r) for r in value["asset_requests"]])
                 return check_storyboard(value, self.script, self.bible, selected, self.runner.card, speech_rate=self.config["speech_rate_chars_per_sec"])
             def output(value, store):
                 normalized = deepcopy(value)

@@ -323,13 +323,8 @@ class Screenwriter:
                 value["script"], repairs = complete_voice_cast(value["script"],parse_bible(candidate_bible))
                 format_repairs.clear(); format_repairs.extend(repairs)
                 errors = check.episode(value,number,candidate_bible)
-                parsed = parse_script(value["script"])
-                visible = sources["bible"].data
-                additions = {e["name"] for e in value["bible_additions"]}
-                allowed_names = set(visible["Characters"]) | set(visible["Extras"]) | set(visible["Voices"]) | additions | {"系统","旁白"}
-                for scene in parsed.scenes:
-                    if set(scene.cast)-allowed_names or scene.location not in set(visible["Locations"]) | additions:
-                        errors.append("Script entities must come from the episode bible slice or explicit bible_additions")
+                # Names and locations are checked against the whole bible by check.episode. The slice only decides what the writer
+                # is shown, so an existing character the plan forgot to list is fine; reviewers see every name the script uses.
                 return errors
             except SflError as exc:
                 return [str(exc)]

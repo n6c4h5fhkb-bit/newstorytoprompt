@@ -196,6 +196,43 @@ class QualityLoopTests(unittest.TestCase):
                 service.gold_add(store, "ep01_u01", "fine")
 
 
+class SceneIdTests(unittest.TestCase):
+    def test_a_whole_scene_heading_is_reduced_to_its_id_and_unknown_ones_are_listed(self):
+        from storyforge.runner.director import normalize_scenes
+        board = {"units": [{"scene": "S01 后山草棚 · 夜 · 内"}, {"scene": "S2"}, {"scene": "S03"}, {"scene": "S09 不存在"}]}
+        normalize_scenes(board, ["S01", "S02", "S03"])
+        self.assertEqual([u["scene"] for u in board["units"]], ["S01", "S2", "S03", "S09 不存在"])
+        from tests.support import RESPONSES, FIXTURE
+        from storyforge.checks import storyboard
+        from storyforge.checks.parsers import parse_bible, parse_script
+        from storyforge.config import configuration, model_card
+        bad = {**RESPONSES["storyboard:ep01"], "units": [{**RESPONSES["storyboard:ep01"]["units"][0], "scene": "S09 不存在"}]}
+        errors = "\n".join(storyboard(bad, parse_script((FIXTURE / "ep01.md").read_text(encoding="utf-8")),
+                                      parse_bible((FIXTURE / "bible.md").read_text(encoding="utf-8")), [], model_card(configuration())))
+        self.assertIn("exactly one of the script's scene IDs: S01", errors)
+
+
+class CastNameTests(unittest.TestCase):
+    def test_asset_ids_in_the_cast_lists_are_reduced_to_character_names(self):
+        from storyforge.runner.director import normalize_cast_names
+        board = {"units": [{"shots": [{"on_screen": ["char:沈砚", "prop:旧玉佩", "沈浩", "char:沈砚@受伤"]}],
+                            "offscreen": ["char:苏婉", "loc:草棚"], "absent": [{"name": "char:钱大夫@病中", "reason": "已离开"}, {"name": "prop:药经", "reason": "x"}]}]}
+        normalize_cast_names(board)
+        unit = board["units"][0]
+        self.assertEqual(unit["shots"][0]["on_screen"], ["沈砚", "沈浩"])
+        self.assertEqual(unit["offscreen"], ["苏婉"])
+        self.assertEqual(unit["absent"], [{"name": "钱大夫", "reason": "已离开"}])
+
+
+class AssetRequestTests(unittest.TestCase):
+    def test_a_description_appended_to_an_asset_request_is_not_part_of_its_id(self):
+        from storyforge.runner.director import normalize_request
+        self.assertEqual(normalize_request("prop:粗陶碗（草棚木桌上的一只空粗陶碗，宽口，哑光）"), "prop:粗陶碗")
+        self.assertEqual(normalize_request("char:云清禾@受伤 (左额受伤)"), "char:云清禾@受伤")
+        self.assertEqual(normalize_request("  @道具_腕镣 "), "@道具_腕镣")
+        self.assertEqual(normalize_request("prop:腕镣"), "prop:腕镣")
+
+
 class AdoptAndEditTests(unittest.TestCase):
     def test_an_adopted_prompt_keeps_the_users_wording_even_when_a_reviewer_objects(self):
         finding = {"severity": "major", "kind": "error", "location": "ep01_u02", "evidence": "用户加的ADOPTMARK",
