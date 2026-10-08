@@ -1,4 +1,5 @@
 """User-requested rewrites, blind-review inputs, role labels and episode rollback."""
+import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -194,6 +195,34 @@ class QualityLoopTests(unittest.TestCase):
             self.assertEqual([g["unit"] for g in report["good_now_failing"]], ["ep01_u01"])
             with self.assertRaisesRegex(SflError, "label good or bad"):
                 service.gold_add(store, "ep01_u01", "fine")
+
+
+class StyleLockTests(unittest.TestCase):
+    def test_scene_lighting_in_the_style_lock_is_named(self):
+        from storyforge.checks import style_lock
+        self.assertEqual(style_lock("2D国风动画，中低饱和暖褐色板，人物受光服从当前场景光源。"), [])
+        error = "\n".join(style_lock("2D国风动画。日光自画面左侧高窗斜入，厅内暖褐。"))
+        self.assertIn("日光", error)
+        self.assertIn("厅", error)
+
+    def test_a_scene_bound_style_lock_is_rewritten_before_it_reaches_any_prompt(self):
+        with tempfile.TemporaryDirectory() as folder:
+            store = project(Path(folder) / "story")
+            runner, model = scripted_runner(store)
+            original = runner.client.codex_transport
+            def scene_bound_first(profile, packet, schema, **kwargs):
+                result = original(profile, packet, schema, **kwargs)
+                if packet.role == "art_director" and not packet.repairs:
+                    value = json.loads(result["text"])
+                    value["style_lock"] += "夜，油灯从墙角照亮草棚。"
+                    result["text"] = json.dumps(value, ensure_ascii=False)
+                return result
+            runner.client.codex_transport = scene_bound_first
+            approve_look(runner)
+            self.assertFalse(runner.run()["waiting"])
+            self.assertEqual(model.counts["art_director:ep01"], 2)
+            self.assertNotIn("油灯", store.text("style.md"))
+            self.assertFalse(any("油灯" in store.text(f"prompts/ep01/{p.name}") for p in store.path("prompts/ep01").iterdir()))
 
 
 class SceneIdTests(unittest.TestCase):

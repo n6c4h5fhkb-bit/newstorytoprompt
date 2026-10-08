@@ -8,7 +8,7 @@ performance：先把本单元的情节拆成表演，再设计镜头；单元含
 
 beats 是本集编剧排好的节拍表（可能为空，空时按剧本自己判断）：分镜按它切单元，压制拍可以放在前一个单元，爆发拍放在单元后半、单独成段，payoff 拍放进它后面的单元开头；每个单元的 performance 要点明它承载哪一拍和落点。
 
-单元节奏约束（硬检查）：每个单元最多 model_card.max_shots_per_unit 个镜头，每个镜头至少 model_card.min_shot_seconds 秒；一个单元只承担一个核心动作或一次情绪推进。镜头里的台词按每秒 speech_rate 个字估算必须说得完（超过 model_card.speech_overrun_limit 倍就是错误），放不下就加长镜头、缩短台词，或把这句话拆进下一个单元。
+单元节奏约束（硬检查）：每个单元最多 model_card.max_shots_per_unit 个镜头，每个镜头至少 model_card.min_shot_seconds 秒；一个单元只承担一个核心动作或一次情绪推进。单个镜头的可见动作数不超过“镜头秒数 ÷ 1.5”，多出来的过程用剪辑省略（只拍起点和结果）或拆镜头。镜头里的台词按每秒 speech_rate 个字估算必须说得完（超过 model_card.speech_overrun_limit 倍就是错误），放不下就加长镜头、缩短台词，或把这句话拆进下一个单元。
 
 输出：storyboard schema。单元 ID epNN_uNN；总 seconds 等于 shots 之和且不超过 model_card。缺资产时在 asset_requests 写所需完整 ID（如 prop:腕镣、char:云清禾@受伤）或占位符；assets 只能引用已提供的 ID。收到 reference_limit_errors 后，自己决定拆段、改变取景或明确说明排除哪些参考，绝不让代码随机删除。
 

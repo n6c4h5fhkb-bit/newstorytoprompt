@@ -4,7 +4,7 @@ import re
 
 from storyforge import ROOT
 from storyforge.config import SflError, load_yaml
-from storyforge.checks import asset_rows, storyboard as check_storyboard, references as check_references, prompt as check_prompt, warnings, rules
+from storyforge.checks import asset_rows, style_lock as check_style_lock, storyboard as check_storyboard, references as check_references, prompt as check_prompt, warnings, rules
 from storyforge.checks.parsers import parse_script, parse_bible
 from storyforge.delivery import export
 from storyforge.delivery.prompts import render, style_document, style_parts, unit_label
@@ -128,7 +128,7 @@ class Director:
             if rejected:
                 result[f".state/look_revisions/{rejected[-1]['id']}.json"] = serialize({"applied": True}) + "\n"
             return result
-        self.runner.work(stage, self.episode, sources, lambda value: [], output, repairs=repairs)
+        self.runner.work(stage, self.episode, sources, lambda value: check_style_lock(value["style_lock"]), output, repairs=repairs)
 
     def asset_extract(self, stage: str, *, force=False):
         if not force and self.store.current(self.marker(stage)):

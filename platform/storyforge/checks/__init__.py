@@ -190,6 +190,15 @@ def references(mapping: list[dict], card: dict) -> list[str]:
     return errors
 
 
+def style_lock(text: str) -> list[str]:
+    """The style lock is pasted into every unit, so anything tied to one scene contradicts every other scene."""
+    found = [word for word in rules()["style_lock_scene_words"] if word in text]
+    if not found:
+        return []
+    return [f"style_lock 含场景专属内容（{'、'.join(found)}）：它会原样插进每个单元，夜戏或其他场景会自相矛盾。"
+            "style_lock 只写渲染风格、线条阴影、色板、通用材质、服饰年代和避免项；时段、光源方向、门窗灯具和具体房间写在 text/art_prompt，由各单元的环境与光线段落说明。"]
+
+
 def prompt_body(text: str, mapping: list[dict]) -> str:
     """The model-written part of a prompt: everything except the code-written reference manifest lines."""
     manifest = tuple(r["placeholder"] + "：" for r in mapping)

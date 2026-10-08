@@ -15,6 +15,8 @@ ambiguous_words: [近侧, 远侧, 初始状态]
 negative_markers: [负面, 禁止, 严禁, 不要, 避免, 不得, 切勿]
 blind_warning_kinds: [prompt_length, ambiguous_position, negatives_in_shots]
 negative_section: '约束：'
+# Words that tie the style lock to one scene, time of day or light source.
+style_lock_scene_words: [日光, 阳光, 月光, 夜, 白天, 清晨, 黄昏, 窗, 油灯, 烛, 灯笼, 篝火, 厅, 宴, 石砖, 草棚, 画面左侧, 画面右侧]
 placeholder_patterns:
   character: {example: '@沈砚_母图 / @沈砚_受伤', master: '^@[^_@]+_母图$', child: '^@[^_@]+_(?!母图$|声音$)[^_@]+$'}
   location: {example: '@宴厅_母图 / @宴厅_夜景', master: '^@[^_@]+_母图$', child: '^@[^_@]+_(?!母图$|声音$)[^_@]+$'}
